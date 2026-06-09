@@ -1,0 +1,6 @@
+CompileFlags:
+  CompilationDatabase: build
+Diagnostics:
+  ClangTidy:
+    Add: ['bugprone-*', 'cert-*', 'readability-*', 'misc-*', 'portability-*']
+    FastCheckFilter: None
