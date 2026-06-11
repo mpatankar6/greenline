@@ -17,7 +17,9 @@ pkg-config should figure out the rest.
 ```sh
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
+cmake --build build --target analyze # Optional: run static analyzer
 ```
+Development builds run with ASan and UBSan.
 
 ### Release:
 For NixOS:

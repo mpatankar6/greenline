@@ -38,6 +38,7 @@
         inputsFrom = [ self.packages.${system}.default ];
         packages = [
           llvm.clang-tools
+          llvm.llvm
           llvm.lldb
         ];
 
