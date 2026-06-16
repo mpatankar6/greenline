@@ -26,8 +26,8 @@
         ];
 
         buildInputs = with pkgs; [
-          cudaPackages.cuda_nvml_dev
           (linuxPackages.nvidia_x11.override { libsOnly = true; })
+          cudaPackages.cuda_nvml_dev
         ];
 
         # Rewrite RPATH so libnvidia-ml.so resolves to the driver's library at runtime.

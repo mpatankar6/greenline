@@ -7,6 +7,7 @@ project(greenline
 
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_C_STANDARD 23)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NVML REQUIRED nvidia-ml)
@@ -16,7 +17,6 @@ add_executable(greenline
   src/gpu.c
 )
 
-target_compile_features(greenline PRIVATE c_std_23)
 target_compile_options(greenline PRIVATE
   -Wall
   -Wextra
@@ -39,3 +39,6 @@ add_custom_target(analyze
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   USES_TERMINAL # Allows colored output
 )
+
+enable_testing()
+add_subdirectory(test)
