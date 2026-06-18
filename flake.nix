@@ -18,16 +18,16 @@
 
         src = ./.;
 
-        nativeBuildInputs = with pkgs; [
-          addDriverRunpath
-          cmake
-          ninja
-          pkg-config
+        nativeBuildInputs = [
+          pkgs.addDriverRunpath
+          pkgs.cmake
+          pkgs.ninja
+          pkgs.pkg-config
         ];
 
-        buildInputs = with pkgs; [
-          (linuxPackages.nvidia_x11.override { libsOnly = true; })
-          cudaPackages.cuda_nvml_dev
+        buildInputs = [
+          (pkgs.linuxPackages.nvidia_x11.override { libsOnly = true; })
+          pkgs.cudaPackages.cuda_nvml_dev
         ];
 
         # Rewrite RPATH so libnvidia-ml.so resolves to the driver's library at runtime.
