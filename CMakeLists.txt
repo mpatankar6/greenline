@@ -10,7 +10,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 23)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(NVML REQUIRED nvidia-ml)
+pkg_check_modules(NVML REQUIRED IMPORTED_TARGET nvidia-ml)
+pkg_check_modules(NCURSES REQUIRED IMPORTED_TARGET ncursesw)
 
 add_executable(greenline
   src/main.c
@@ -28,8 +29,8 @@ target_link_options(greenline PRIVATE
   $<$<CONFIG:Debug>:-fsanitize=address,undefined>
 )
 
-target_include_directories(greenline PRIVATE ${NVML_INCLUDE_DIRS})
-target_link_libraries(greenline PRIVATE ${NVML_LINK_LIBRARIES})
+target_link_libraries(greenline PRIVATE PkgConfig::NVML)
+target_link_libraries(greenline PRIVATE PkgConfig::NCURSES)
 
 install(TARGETS greenline DESTINATION bin)
 
