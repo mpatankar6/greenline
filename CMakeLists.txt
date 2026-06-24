@@ -16,6 +16,7 @@ pkg_check_modules(NCURSES REQUIRED IMPORTED_TARGET ncursesw)
 add_executable(greenline
   src/main.c
   src/gpu.c
+  src/tui.c
 )
 
 target_compile_options(greenline PRIVATE
