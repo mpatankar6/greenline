@@ -1,19 +1,26 @@
 #include "tui.h"
+#include <assert.h>
 #include <curses.h>
 #include <locale.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const char TITLE[] = "Greenline";
 static const int MIN_WIDTH = 80;
 static const int MIN_HEIGHT = 24;
 
-// Styling attributes
 enum {
   PAIR_TITLE = 1,
+  PAIR_SELECTED_TAB,
 };
-static constexpr auto ATTR_TITLE = (COLOR_PAIR(PAIR_TITLE) | A_BOLD);
+static void init_colors() {
+  start_color();
+  use_default_colors();
+  init_pair(PAIR_TITLE, COLOR_GREEN, -1);
+  init_pair(PAIR_SELECTED_TAB, COLOR_BLUE, -1);
+}
 
 typedef struct Tab {
   const char *name;
@@ -25,6 +32,7 @@ static const Tab TABS[] = {
     {"Info"},
 };
 static constexpr size_t TAB_COUNT = (sizeof(TABS) / sizeof(TABS[0]));
+static size_t selected_tab_index = 1;
 
 typedef bool ShouldContinue;
 
@@ -51,6 +59,10 @@ static ShouldContinue enforce_minimum_size() {
 
 static ShouldContinue handle_input() {
   auto input = getch();
+  if (input >= '1' && input <= '4') {
+    selected_tab_index = input - '0';
+    return true;
+  }
   switch (input) {
   case KEY_RESIZE:
     return enforce_minimum_size();
@@ -66,20 +78,24 @@ static ShouldContinue handle_input() {
 
 static void draw_tab_line() {
   int x_pos = 2;
-  for (size_t tab_index = 0; tab_index < TAB_COUNT; ++tab_index) {
-    auto tab = TABS[tab_index];
+  for (size_t tab_index = 1; tab_index <= TAB_COUNT; ++tab_index) {
+    auto tab = TABS[tab_index - 1];
     char name[256];
-    (void)snprintf(name, sizeof(name), " [%zu] %s ", tab_index + 1, tab.name);
+    (void)snprintf(name, sizeof(name), " [%zu] %s ", tab_index, tab.name);
+    if (tab_index == selected_tab_index) {
+      attr_set(A_BOLD, PAIR_SELECTED_TAB, nullptr);
+    }
     mvprintw(0, x_pos, "%s", name);
     x_pos += (int)strlen(name);
+    attr_set(A_NORMAL, 0, nullptr);
   }
 }
 
 static void draw_title() {
   int x_pos = COLS - (int)strlen(TITLE) - 4;
-  attron(ATTR_TITLE);
+  attr_set(A_BOLD, PAIR_TITLE, nullptr);
   mvprintw(0, x_pos, " %s ", TITLE);
-  attroff(ATTR_TITLE);
+  attr_set(A_NORMAL, 0, nullptr);
 }
 
 static void draw_frame() {
@@ -101,21 +117,16 @@ void tui_init() {
   }
 
   initscr();
-
-  // Initialize colors
-  start_color();
-  use_default_colors();
-  init_pair(PAIR_TITLE, COLOR_GREEN, -1);
-
+  init_colors();
   cbreak();
   noecho();
   keypad(stdscr, true);
   curs_set(0);
 }
 
-bool tui_run() {
+void tui_run() {
   if (!enforce_minimum_size()) {
-    return false;
+    return;
   }
   for (;;) {
     erase();
@@ -123,7 +134,7 @@ bool tui_run() {
     refresh();
     auto should_continue = handle_input();
     if (!should_continue) {
-      return false;
+      return;
     }
   }
 }
