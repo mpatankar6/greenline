@@ -5,15 +5,26 @@
 #include <stdio.h>
 #include <string.h>
 
+static const char TITLE[] = "Greenline";
 static const int MIN_WIDTH = 80;
 static const int MIN_HEIGHT = 24;
-static const char TAB_NAMES[][16] = {
-    "General",
-    "Overclocking",
-    "Thermal Control",
-    "Device Info",
+
+// Styling attributes
+enum {
+  PAIR_TITLE = 1,
 };
-static constexpr size_t TAB_COUNT = (sizeof(TAB_NAMES) / sizeof(TAB_NAMES[0]));
+static constexpr auto ATTR_TITLE = (COLOR_PAIR(PAIR_TITLE) | A_BOLD);
+
+typedef struct Tab {
+  const char *name;
+} Tab;
+static const Tab TABS[] = {
+    {"General"},
+    {"OC"},
+    {"Thermals"},
+    {"Info"},
+};
+static constexpr size_t TAB_COUNT = (sizeof(TABS) / sizeof(TABS[0]));
 
 typedef bool ShouldContinue;
 
@@ -38,7 +49,8 @@ static ShouldContinue enforce_minimum_size() {
   return true;
 }
 
-static ShouldContinue handle_input(int input) {
+static ShouldContinue handle_input() {
+  auto input = getch();
   switch (input) {
   case KEY_RESIZE:
     return enforce_minimum_size();
@@ -52,12 +64,49 @@ static ShouldContinue handle_input(int input) {
   return true;
 }
 
+static void draw_tab_line() {
+  int x_pos = 2;
+  for (size_t tab_index = 0; tab_index < TAB_COUNT; ++tab_index) {
+    auto tab = TABS[tab_index];
+    char name[256];
+    (void)snprintf(name, sizeof(name), " [%zu] %s ", tab_index + 1, tab.name);
+    mvprintw(0, x_pos, "%s", name);
+    x_pos += (int)strlen(name);
+  }
+}
+
+static void draw_title() {
+  int x_pos = COLS - (int)strlen(TITLE) - 4;
+  attron(ATTR_TITLE);
+  mvprintw(0, x_pos, " %s ", TITLE);
+  attroff(ATTR_TITLE);
+}
+
+static void draw_frame() {
+  mvhline(0, 1, ACS_HLINE, COLS - 2);
+  mvhline(LINES - 1, 1, ACS_HLINE, COLS - 2);
+  mvvline(1, 0, ACS_VLINE, LINES - 2);
+  mvvline(1, COLS - 1, ACS_VLINE, LINES - 2);
+  mvaddch(0, 0, ACS_ULCORNER);
+  mvaddch(0, COLS - 1, ACS_URCORNER);
+  mvaddch(LINES - 1, 0, ACS_LLCORNER);
+  mvaddch(LINES - 1, COLS - 1, ACS_LRCORNER);
+  draw_tab_line();
+  draw_title();
+}
+
 void tui_init() {
   if (setlocale(LC_ALL, "") == nullptr) {
     (void)fprintf(stderr, "warning: couldn't set locale\n");
   }
 
   initscr();
+
+  // Initialize colors
+  start_color();
+  use_default_colors();
+  init_pair(PAIR_TITLE, COLOR_GREEN, -1);
+
   cbreak();
   noecho();
   keypad(stdscr, true);
@@ -70,9 +119,9 @@ bool tui_run() {
   }
   for (;;) {
     erase();
+    draw_frame();
     refresh();
-    auto input = getch();
-    auto should_continue = handle_input(input);
+    auto should_continue = handle_input();
     if (!should_continue) {
       return false;
     }
