@@ -1,4 +1,5 @@
 #include "tui.h"
+#include "gpu.h"
 #include <assert.h>
 #include <curses.h>
 #include <locale.h>
@@ -10,6 +11,7 @@
 static const char TITLE[] = "Greenline";
 static const int MIN_WIDTH = 80;
 static const int MIN_HEIGHT = 24;
+static const int POLL_MS = 500;
 
 enum {
   PAIR_TITLE = 1,
@@ -22,9 +24,10 @@ static void init_colors() {
   init_pair(PAIR_SELECTED_TAB, COLOR_BLUE, -1);
 }
 
-typedef struct Tab {
-  const char *name;
-} Tab;
+// typedef struct Tab {
+//   const char *name;
+// } Tab;
+typedef const char Tab[16];
 static const Tab TABS[] = {
     {"General"},
     {"OC"},
@@ -81,7 +84,7 @@ static void draw_tab_line() {
   for (size_t tab_index = 1; tab_index <= TAB_COUNT; ++tab_index) {
     auto tab = TABS[tab_index - 1];
     char name[256];
-    (void)snprintf(name, sizeof(name), " [%zu] %s ", tab_index, tab.name);
+    (void)snprintf(name, sizeof(name), " [%zu] %s ", tab_index, tab);
     if (tab_index == selected_tab_index) {
       attr_set(A_BOLD, PAIR_SELECTED_TAB, nullptr);
     }
@@ -111,6 +114,39 @@ static void draw_frame() {
   draw_title();
 }
 
+static void draw_general_tab(WINDOW *tab_page) {}
+static void draw_oc_tab(WINDOW *tab_page) {}
+static void draw_thermals_tab(WINDOW *tab_page) {}
+static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
+  int y_pos = 1;
+  int x_pos = 1;
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "GPU Device Info");
+  ++y_pos;
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Device:      %s", state->name);
+  mvwprintw(tab_page, y_pos++, x_pos, "Archtecture: %s", state->architecture);
+}
+
+static void draw_content(WINDOW *window, const GpuState *gpu_state) {
+  switch (selected_tab_index) {
+  case 1:
+    draw_general_tab(window);
+    break;
+  case 2:
+    draw_oc_tab(window);
+    break;
+  case 3:
+    draw_thermals_tab(window);
+    break;
+  case 4:
+    draw_info_tab(window, gpu_state);
+    break;
+  default:
+    return;
+  }
+}
+
 void tui_init() {
   if (setlocale(LC_ALL, "") == nullptr) {
     (void)fprintf(stderr, "warning: couldn't set locale\n");
@@ -122,18 +158,24 @@ void tui_init() {
   noecho();
   keypad(stdscr, true);
   curs_set(0);
+  timeout(POLL_MS);
 }
 
-void tui_run() {
+void tui_run(Gpu *gpu) {
   if (!enforce_minimum_size()) {
     return;
   }
+  auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
   for (;;) {
     erase();
     draw_frame();
+    gpu_update_state(gpu);
+    draw_content(tab_page, gpu_get_state(gpu));
+    wrefresh(tab_page);
     refresh();
     auto should_continue = handle_input();
     if (!should_continue) {
+      delwin(tab_page);
       return;
     }
   }

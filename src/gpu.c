@@ -5,8 +5,8 @@
 #include <stdlib.h>
 
 struct Gpu {
-  nvmlDevice_t device_handle;
-  GpuInfo device_info;
+  nvmlDevice_t handle;
+  GpuState state;
 };
 
 // Return true if there was an error, otherwise false.
@@ -51,6 +51,21 @@ static const char *arch_to_string(nvmlDeviceArchitecture_t arch) {
   }
 }
 
+static void gpu_update_static_state(Gpu *gpu) {
+  auto state = &gpu->state;
+  auto device = gpu->handle;
+  auto last_status =
+      nvmlDeviceGetName(device, state->name, NVML_DEVICE_NAME_V2_BUFFER_SIZE);
+  check_error(last_status, "Error retrieving device name");
+
+  nvmlDeviceArchitecture_t arch = {0};
+  last_status = nvmlDeviceGetArchitecture(device, &arch);
+  check_error(last_status, "Error retrieving device architecture");
+  state->architecture = arch_to_string(arch);
+}
+
+static void gpu_update_dynamic_state(Gpu *gpu) {}
+
 Gpu *gpu_init() {
   auto last_status = nvmlInit();
   if (check_error(last_status, "Error during NVML initialization")) {
@@ -63,35 +78,38 @@ Gpu *gpu_init() {
     exit(EXIT_FAILURE);
   }
 
-  GpuInfo gpu_info = {0};
-
-  last_status =
-      nvmlDeviceGetName(device, gpu_info.name, NVML_DEVICE_NAME_V2_BUFFER_SIZE);
-  check_error(last_status, "Error retrieving device name");
-
-  nvmlDeviceArchitecture_t arch = {0};
-  last_status = nvmlDeviceGetArchitecture(device, &arch);
-  check_error(last_status, "Error retrieving device architecture");
-  gpu_info.architecture = arch_to_string(arch);
-
-  nvmlMemory_v2_t memory = {.version = nvmlMemory_v2};
-  last_status = nvmlDeviceGetMemoryInfo_v2(device, &memory);
-  check_error(last_status, "Error retrieving device memory info");
-  gpu_info.total_vram_bytes = memory.total;
-  gpu_info.usable_vram_bytes = memory.total - memory.reserved;
-
-  last_status = nvmlDeviceGetNumFans(device, &gpu_info.num_fans);
-  check_error(last_status, "Error retrieving fan count");
-
-  last_status = nvmlDeviceGetNumGpuCores(device, &gpu_info.num_gpu_cores);
-  check_error(last_status, "Error retrieving gpu core count");
+  // nvmlMemory_v2_t memory = {.version = nvmlMemory_v2};
+  // last_status = nvmlDeviceGetMemoryInfo_v2(device, &memory);
+  // check_error(last_status, "Error retrieving device memory info");
+  // gpu_info.total_vram_bytes = memory.total;
+  // gpu_info.usable_vram_bytes = memory.total - memory.reserved;
+  //
+  // last_status = nvmlDeviceGetNumFans(device, &gpu_info.num_fans);
+  //
+  // check_error(last_status, "Error retrieving fan count");
+  //
+  // last_status = nvmlDeviceGetNumGpuCores(device, &gpu_info.num_gpu_cores);
+  // check_error(last_status, "Error retrieving gpu core count");
 
   Gpu *gpu = calloc(1, sizeof(Gpu));
-  gpu->device_handle = device;
-  gpu->device_info = gpu_info;
+  gpu->handle = device;
+  gpu->state = (GpuState){};
+  gpu_update_state(gpu);
   return gpu;
 }
 
-GpuInfo gpu_get_info(const Gpu *gpu) { return gpu->device_info; }
+const GpuState *gpu_get_state(const Gpu *gpu) { return &gpu->state; }
 
-void gpu_destroy(Gpu *gpu) { free(gpu); }
+void gpu_update_state(Gpu *gpu) {
+  /** Splitting into static and dynamic updates allows us to not waste nvml
+  calls on stuff doesn't change.*/
+  if (!gpu->state.initialized) {
+    gpu_update_static_state(gpu);
+  }
+  gpu_update_dynamic_state(gpu);
+}
+
+void gpu_destroy(Gpu *gpu) {
+  // TODO close nvml device connection
+  free(gpu);
+}
