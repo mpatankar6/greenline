@@ -14,7 +14,7 @@
     {
       packages.${system}.default = llvm.stdenv.mkDerivation {
         pname = "greenline";
-        version = "0.0.1";
+        version = pkgs.lib.trim (builtins.readFile ./VERSION);
 
         src = ./.;
 

@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 4.1)
 
+file(READ "${CMAKE_SOURCE_DIR}/VERSION" APP_VERSION)
+string(STRIP "${APP_VERSION}" APP_VERSION)
 project(greenline
-  VERSION 0.0.1
+  VERSION ${APP_VERSION}
   LANGUAGES C
 )
 
@@ -19,6 +21,7 @@ add_executable(greenline
   src/tui.c
 )
 
+target_compile_definitions(greenline PRIVATE VERSION_STRING="${PROJECT_VERSION}")
 target_compile_options(greenline PRIVATE
   -Wall
   -Wextra
