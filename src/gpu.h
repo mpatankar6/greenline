@@ -1,13 +1,17 @@
 #pragma once
-#include <nvml.h>
-#include <stdint.h>
 
 typedef struct [[nodiscard]] {
   bool initialized;
-  char name[NVML_DEVICE_NAME_V2_BUFFER_SIZE];
+  char name[128];
   const char *architecture;
-  uint64_t total_vram_bytes;
-  uint64_t usable_vram_bytes;
+  int total_vram_mib;
+  int usable_vram_mib;
+  int used_vram_mib;
+  int free_vram_mib;
+  unsigned int encoder_utilization;
+  unsigned int decoder_utilization;
+  unsigned int core_clock_mhz;
+  unsigned int mem_clock_mhz;
   unsigned int num_fans;
   unsigned int num_gpu_cores;
 } GpuState;

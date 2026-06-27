@@ -114,7 +114,17 @@ static void draw_frame() {
   draw_title();
 }
 
-static void draw_general_tab(WINDOW *tab_page) {}
+static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
+  int y_pos = 1;
+  int x_pos = 1;
+  mvwprintw(tab_page, y_pos++, x_pos, "Memory: %'d MiB/%'d MiB",
+            state->used_vram_mib, state->usable_vram_mib);
+
+  mvwprintw(tab_page, y_pos++, x_pos, "Encoder: %d%%",
+            state->encoder_utilization);
+  mvwprintw(tab_page, y_pos++, x_pos, "Decoder: %d%%",
+            state->decoder_utilization);
+}
 static void draw_oc_tab(WINDOW *tab_page) {}
 static void draw_thermals_tab(WINDOW *tab_page) {}
 static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
@@ -126,12 +136,14 @@ static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Device:      %s", state->name);
   mvwprintw(tab_page, y_pos++, x_pos, "Archtecture: %s", state->architecture);
+  mvwprintw(tab_page, y_pos++, x_pos, "VRAM:        %'d MiB (%'d MiB usable)",
+            state->total_vram_mib, state->usable_vram_mib);
 }
 
 static void draw_content(WINDOW *window, const GpuState *gpu_state) {
   switch (selected_tab_index) {
   case 1:
-    draw_general_tab(window);
+    draw_general_tab(window, gpu_state);
     break;
   case 2:
     draw_oc_tab(window);

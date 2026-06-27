@@ -51,10 +51,17 @@ static const char *arch_to_string(nvmlDeviceArchitecture_t arch) {
   }
 }
 
+static int bytes_to_mib(unsigned long long bytes) {
+  const int BYTES_PER_MIB = 1024 * 1024;
+  return (int)(bytes / BYTES_PER_MIB);
+}
+
 static void gpu_update_static_state(Gpu *gpu) {
   auto state = &gpu->state;
   auto device = gpu->handle;
-  auto last_status =
+  auto last_status = NVML_SUCCESS;
+
+  last_status =
       nvmlDeviceGetName(device, state->name, NVML_DEVICE_NAME_V2_BUFFER_SIZE);
   check_error(last_status, "Error retrieving device name");
 
@@ -62,9 +69,33 @@ static void gpu_update_static_state(Gpu *gpu) {
   last_status = nvmlDeviceGetArchitecture(device, &arch);
   check_error(last_status, "Error retrieving device architecture");
   state->architecture = arch_to_string(arch);
+
+  nvmlMemory_v2_t memory = {.version = nvmlMemory_v2};
+  last_status = nvmlDeviceGetMemoryInfo_v2(device, &memory);
+  check_error(last_status, "Error retrieving device memory info");
+  state->total_vram_mib = bytes_to_mib(memory.total);
+  state->usable_vram_mib = bytes_to_mib(memory.total - memory.reserved);
 }
 
-static void gpu_update_dynamic_state(Gpu *gpu) {}
+static void gpu_update_dynamic_state(Gpu *gpu) {
+  auto state = &gpu->state;
+  auto device = gpu->handle;
+  auto last_status = NVML_SUCCESS;
+
+  nvmlMemory_v2_t memory = {.version = nvmlMemory_v2};
+  last_status = nvmlDeviceGetMemoryInfo_v2(device, &memory);
+  check_error(last_status, "Error retrieving device memory info");
+  state->used_vram_mib = bytes_to_mib(memory.used);
+  state->free_vram_mib = bytes_to_mib(memory.free);
+
+  unsigned int unused;
+  last_status = nvmlDeviceGetDecoderUtilization(
+      device, &state->decoder_utilization, &unused);
+  check_error(last_status, "Error retrieving device decoder utilization");
+  last_status = nvmlDeviceGetEncoderUtilization(
+      device, &state->encoder_utilization, &unused);
+  check_error(last_status, "Error retrieving device encoder utilization");
+}
 
 Gpu *gpu_init() {
   auto last_status = nvmlInit();
@@ -78,11 +109,6 @@ Gpu *gpu_init() {
     exit(EXIT_FAILURE);
   }
 
-  // nvmlMemory_v2_t memory = {.version = nvmlMemory_v2};
-  // last_status = nvmlDeviceGetMemoryInfo_v2(device, &memory);
-  // check_error(last_status, "Error retrieving device memory info");
-  // gpu_info.total_vram_bytes = memory.total;
-  // gpu_info.usable_vram_bytes = memory.total - memory.reserved;
   //
   // last_status = nvmlDeviceGetNumFans(device, &gpu_info.num_fans);
   //
