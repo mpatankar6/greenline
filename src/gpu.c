@@ -195,6 +195,7 @@ void gpu_update_state(Gpu *gpu) {
 }
 
 void gpu_destroy(Gpu *gpu) {
-  // TODO close nvml device connection
+  auto shutdown_status = nvmlShutdown();
+  check_error(shutdown_status, "Error shutting down NVML");
   free(gpu);
 }
