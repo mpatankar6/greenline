@@ -117,32 +117,58 @@ static void draw_frame() {
 static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
   int y_pos = 1;
   int x_pos = 1;
+  int cols = getmaxx(tab_page);
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Core");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Clock Speed: %d Mhz",
+            state->core_clock_mhz);
+  y_pos++;
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Memory");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+
   mvwprintw(tab_page, y_pos++, x_pos, "Memory: %'d MiB/%'d MiB",
             state->used_vram_mib, state->usable_vram_mib);
-
-  mvwprintw(tab_page, y_pos++, x_pos, "Encoder: %d%%",
-            state->encoder_utilization);
-  mvwprintw(tab_page, y_pos++, x_pos, "Decoder: %d%%",
-            state->decoder_utilization);
-  mvwprintw(tab_page, y_pos++, x_pos, "Core Clock: %d Mhz",
-            state->core_clock_mhz);
   mvwprintw(tab_page, y_pos++, x_pos, "Memory Clock: %d Mhz",
             state->memory_clock_mhz);
+  y_pos++;
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Thermals");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Fan Speed: %d%% (%d RPM)",
+            state->fan_speed_percentage, state->fan_speed_rpm);
+  mvwprintw(tab_page, y_pos++, x_pos, "Temperature: %d°C",
+            state->temperature_celsius);
+  // Switch columns
+  y_pos = 1;
+  x_pos += cols / 2;
   mvwprintw(tab_page, y_pos++, x_pos, "P-State: %s", state->performance_state);
+  mvwprintw(tab_page, y_pos++, x_pos, "Encoder: %d%%   Decoder: %d%%",
+            state->encoder_utilization, state->decoder_utilization);
 }
+
 static void draw_oc_tab(WINDOW *tab_page) {}
 static void draw_thermals_tab(WINDOW *tab_page) {}
 static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
   int y_pos = 1;
   int x_pos = 1;
+  mvwprintw(tab_page, y_pos++, x_pos, "Driver Version: %s", state->driver_version);
+  mvwprintw(tab_page, y_pos++, x_pos, "NVML Version:   %s", state->nvml_version);
+  mvwprintw(tab_page, y_pos++, x_pos, "CUDA Version:   %s", state->cuda_version);
+  ++y_pos;
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "GPU Device Info");
-  ++y_pos;
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Device:      %s", state->name);
   mvwprintw(tab_page, y_pos++, x_pos, "Archtecture: %s", state->architecture);
   mvwprintw(tab_page, y_pos++, x_pos, "VRAM:        %'d MiB (%'d MiB usable)",
             state->total_vram_mib, state->usable_vram_mib);
+  mvwprintw(tab_page, y_pos++, x_pos, "PCIe:        Gen %d x%d",
+            state->pcie_max_link_generation, state->pcie_max_link_width);
 }
 
 static void draw_content(WINDOW *window, const GpuState *gpu_state) {
@@ -182,17 +208,17 @@ void tui_run(Gpu *gpu) {
   if (!enforce_minimum_size()) {
     return;
   }
-  auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
   for (;;) {
+    auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
     erase();
     draw_frame();
     gpu_update_state(gpu);
     draw_content(tab_page, gpu_get_state(gpu));
     wrefresh(tab_page);
     refresh();
+    delwin(tab_page);
     auto should_continue = handle_input();
     if (!should_continue) {
-      delwin(tab_page);
       return;
     }
   }

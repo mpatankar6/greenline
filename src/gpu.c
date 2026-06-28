@@ -1,4 +1,5 @@
 #include "gpu.h"
+#include <assert.h>
 #include <nvml.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -61,8 +62,26 @@ static void gpu_update_static_state(Gpu *gpu) {
   auto device = gpu->handle;
   auto last_status = NVML_SUCCESS;
 
-  last_status =
-      nvmlDeviceGetName(device, state->name, NVML_DEVICE_NAME_V2_BUFFER_SIZE);
+  static_assert(sizeof(state->driver_version) >=
+                NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE);
+  last_status = nvmlSystemGetDriverVersion(state->driver_version,
+                                           sizeof(state->driver_version));
+  check_error(last_status, "Error retrieving driver version");
+  static_assert(sizeof(state->nvml_version) >=
+                NVML_SYSTEM_NVML_VERSION_BUFFER_SIZE);
+  last_status = nvmlSystemGetNVMLVersion(state->nvml_version,
+                                         sizeof(state->nvml_version));
+  check_error(last_status, "Error retrieving nvml version");
+  int cuda_version = 0;
+  last_status = nvmlSystemGetCudaDriverVersion(&cuda_version);
+  if (!check_error(last_status, "Error retrieving CUDA version")) {
+    (void)snprintf(state->cuda_version, sizeof(state->cuda_version), "%d.%d",
+                   NVML_CUDA_DRIVER_VERSION_MAJOR(cuda_version),
+                   NVML_CUDA_DRIVER_VERSION_MINOR(cuda_version));
+  }
+
+  static_assert(sizeof(state->name) >= NVML_DEVICE_NAME_V2_BUFFER_SIZE);
+  last_status = nvmlDeviceGetName(device, state->name, sizeof(state->name));
   check_error(last_status, "Error retrieving device name");
 
   nvmlDeviceArchitecture_t arch = {0};
@@ -75,6 +94,13 @@ static void gpu_update_static_state(Gpu *gpu) {
   check_error(last_status, "Error retrieving device memory info");
   state->total_vram_mib = bytes_to_mib(memory.total);
   state->usable_vram_mib = bytes_to_mib(memory.total - memory.reserved);
+
+  last_status = nvmlDeviceGetMaxPcieLinkGeneration(
+      device, &state->pcie_max_link_generation);
+  check_error(last_status, "Error retrieving device pcie max link gen");
+  last_status =
+      nvmlDeviceGetMaxPcieLinkWidth(device, &state->pcie_max_link_width);
+  check_error(last_status, "Error retrieving device pcie max link width");
 }
 
 static void gpu_update_dynamic_state(Gpu *gpu) {
@@ -102,6 +128,25 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
   last_status =
       nvmlDeviceGetClockInfo(device, NVML_CLOCK_MEM, &state->memory_clock_mhz);
   check_error(last_status, "Error retrieving device graphics clock");
+
+  // These two calls assume a fan index of 0. This is okay because consumer GPUs
+  // typically report all fans under index 0 in NVML.
+  last_status =
+      nvmlDeviceGetFanSpeed_v2(device, 0, &state->fan_speed_percentage);
+  check_error(last_status, "Error retrieving device fan speed percentage");
+  nvmlFanSpeedInfo_t fan_speed_info = {.version = nvmlFanSpeedInfo_v1,
+                                       .fan = 0};
+  last_status = nvmlDeviceGetFanSpeedRPM(device, &fan_speed_info);
+  check_error(last_status, "Error retrieving device fan speed RPM");
+  state->fan_speed_rpm = fan_speed_info.speed;
+
+  nvmlTemperature_t temperature_info = {
+      .version = nvmlTemperature_v1,
+      .sensorType = NVML_TEMPERATURE_GPU,
+  };
+  last_status = nvmlDeviceGetTemperatureV(device, &temperature_info);
+  check_error(last_status, "Error retrieving device temperature");
+  state->temperature_celsius = temperature_info.temperature;
 
   nvmlPstates_t pstate = NVML_PSTATE_UNKNOWN;
   last_status = nvmlDeviceGetPerformanceState(device, &pstate);
@@ -144,6 +189,7 @@ void gpu_update_state(Gpu *gpu) {
   calls on stuff doesn't change.*/
   if (!gpu->state.initialized) {
     gpu_update_static_state(gpu);
+    gpu->state.initialized = true;
   }
   gpu_update_dynamic_state(gpu);
 }
