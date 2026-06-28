@@ -124,6 +124,11 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
             state->encoder_utilization);
   mvwprintw(tab_page, y_pos++, x_pos, "Decoder: %d%%",
             state->decoder_utilization);
+  mvwprintw(tab_page, y_pos++, x_pos, "Core Clock: %d Mhz",
+            state->core_clock_mhz);
+  mvwprintw(tab_page, y_pos++, x_pos, "Memory Clock: %d Mhz",
+            state->memory_clock_mhz);
+  mvwprintw(tab_page, y_pos++, x_pos, "P-State: %s", state->performance_state);
 }
 static void draw_oc_tab(WINDOW *tab_page) {}
 static void draw_thermals_tab(WINDOW *tab_page) {}

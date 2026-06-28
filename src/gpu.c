@@ -95,6 +95,19 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
   last_status = nvmlDeviceGetEncoderUtilization(
       device, &state->encoder_utilization, &unused);
   check_error(last_status, "Error retrieving device encoder utilization");
+
+  last_status = nvmlDeviceGetClockInfo(device, NVML_CLOCK_GRAPHICS,
+                                       &state->core_clock_mhz);
+  check_error(last_status, "Error retrieving device graphics clock");
+  last_status =
+      nvmlDeviceGetClockInfo(device, NVML_CLOCK_MEM, &state->memory_clock_mhz);
+  check_error(last_status, "Error retrieving device graphics clock");
+
+  nvmlPstates_t pstate = NVML_PSTATE_UNKNOWN;
+  last_status = nvmlDeviceGetPerformanceState(device, &pstate);
+  check_error(last_status, "Error retrieving device pstate");
+  (void)snprintf(state->performance_state, sizeof(state->performance_state),
+                 pstate == NVML_PSTATE_UNKNOWN ? "?" : "P%d", pstate);
 }
 
 Gpu *gpu_init() {

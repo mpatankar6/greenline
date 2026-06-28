@@ -11,7 +11,8 @@ typedef struct [[nodiscard]] {
   unsigned int encoder_utilization;
   unsigned int decoder_utilization;
   unsigned int core_clock_mhz;
-  unsigned int mem_clock_mhz;
+  unsigned int memory_clock_mhz;
+  char performance_state[4]; // Ex: P0, P8, or ?
   unsigned int num_fans;
   unsigned int num_gpu_cores;
 } GpuState;
