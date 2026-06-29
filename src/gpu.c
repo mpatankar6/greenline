@@ -116,18 +116,24 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
 
   unsigned int unused;
   last_status = nvmlDeviceGetDecoderUtilization(
-      device, &state->decoder_utilization, &unused);
+      device, &state->decoder_util_percent, &unused);
   check_error(last_status, "Error retrieving device decoder utilization");
   last_status = nvmlDeviceGetEncoderUtilization(
-      device, &state->encoder_utilization, &unused);
+      device, &state->encoder_util_percent, &unused);
   check_error(last_status, "Error retrieving device encoder utilization");
+
+  nvmlUtilization_t utilization = {};
+  last_status = nvmlDeviceGetUtilizationRates(device, &utilization);
+  check_error(last_status, "Error retrieving device gpu utilization");
+  state->gpu_util_percent = utilization.gpu;
+  state->mem_ctrl_util_percent = utilization.memory;
 
   last_status = nvmlDeviceGetClockInfo(device, NVML_CLOCK_GRAPHICS,
                                        &state->core_clock_mhz);
   check_error(last_status, "Error retrieving device graphics clock");
   last_status =
       nvmlDeviceGetClockInfo(device, NVML_CLOCK_MEM, &state->memory_clock_mhz);
-  check_error(last_status, "Error retrieving device graphics clock");
+  check_error(last_status, "Error retrieving device memory clock");
 
   // These two calls assume a fan index of 0. This is okay because consumer GPUs
   // typically report all fans under index 0 in NVML.

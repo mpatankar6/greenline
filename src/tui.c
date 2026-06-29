@@ -122,6 +122,8 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Core");
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "GPU Utilization: %d%%",
+            state->gpu_util_percent);
   mvwprintw(tab_page, y_pos++, x_pos, "Clock Speed: %d Mhz",
             state->core_clock_mhz);
   y_pos++;
@@ -134,6 +136,8 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
             state->used_vram_mib, state->usable_vram_mib);
   mvwprintw(tab_page, y_pos++, x_pos, "Memory Clock: %d Mhz",
             state->memory_clock_mhz);
+  mvwprintw(tab_page, y_pos++, x_pos, "Controller Utilization: %d%%",
+            state->mem_ctrl_util_percent);
   y_pos++;
 
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
@@ -148,7 +152,7 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
   x_pos += cols / 2;
   mvwprintw(tab_page, y_pos++, x_pos, "P-State: %s", state->performance_state);
   mvwprintw(tab_page, y_pos++, x_pos, "Encoder: %d%%   Decoder: %d%%",
-            state->encoder_utilization, state->decoder_utilization);
+            state->encoder_util_percent, state->decoder_util_percent);
 }
 
 static void draw_oc_tab(WINDOW *tab_page) {}
@@ -156,9 +160,12 @@ static void draw_thermals_tab(WINDOW *tab_page) {}
 static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
   int y_pos = 1;
   int x_pos = 1;
-  mvwprintw(tab_page, y_pos++, x_pos, "Driver Version: %s", state->driver_version);
-  mvwprintw(tab_page, y_pos++, x_pos, "NVML Version:   %s", state->nvml_version);
-  mvwprintw(tab_page, y_pos++, x_pos, "CUDA Version:   %s", state->cuda_version);
+  mvwprintw(tab_page, y_pos++, x_pos, "Driver Version: %s",
+            state->driver_version);
+  mvwprintw(tab_page, y_pos++, x_pos, "NVML Version:   %s",
+            state->nvml_version);
+  mvwprintw(tab_page, y_pos++, x_pos, "CUDA Version:   %s",
+            state->cuda_version);
   ++y_pos;
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "GPU Device Info");

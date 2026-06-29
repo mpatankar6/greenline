@@ -1,6 +1,6 @@
 #pragma once
 
-typedef struct [[nodiscard]] {
+typedef struct {
   bool initialized;
   char driver_version[128];
   char nvml_version[128];
@@ -11,8 +11,10 @@ typedef struct [[nodiscard]] {
   int usable_vram_mib;
   int used_vram_mib;
   int free_vram_mib;
-  unsigned int encoder_utilization;
-  unsigned int decoder_utilization;
+  unsigned int encoder_util_percent;
+  unsigned int decoder_util_percent;
+  unsigned int gpu_util_percent;
+  unsigned int mem_ctrl_util_percent;
   unsigned int core_clock_mhz;
   unsigned int memory_clock_mhz;
   unsigned int temperature_celsius;
