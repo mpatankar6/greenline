@@ -19,6 +19,7 @@ add_executable(greenline
   src/main.c
   src/gpu.c
   src/tui.c
+  src/circular_buffer.c
 )
 
 target_compile_definitions(greenline PRIVATE VERSION_STRING="${PROJECT_VERSION}")

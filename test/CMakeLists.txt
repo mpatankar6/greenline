@@ -4,4 +4,4 @@ function(add_unit_test TEST_NAME)
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 endfunction()
 
-add_unit_test(test_ring_buffer ../src/ring_buffer.c)
+add_unit_test(test_circular_buffer ../src/circular_buffer.c)
