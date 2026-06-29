@@ -16,12 +16,14 @@ static const int POLL_MS = 500;
 enum {
   PAIR_TITLE = 1,
   PAIR_SELECTED_TAB,
+  PAIR_HEADING,
 };
 static void init_colors() {
   start_color();
   use_default_colors();
   init_pair(PAIR_TITLE, COLOR_GREEN, -1);
   init_pair(PAIR_SELECTED_TAB, COLOR_BLUE, -1);
+  init_pair(PAIR_HEADING, COLOR_YELLOW, -1);
 }
 
 // typedef struct Tab {
@@ -122,9 +124,9 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Core");
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "GPU Utilization: %d%%",
+  mvwprintw(tab_page, y_pos++, x_pos, "GPU Utilization: %u%%",
             state->gpu_util_percent);
-  mvwprintw(tab_page, y_pos++, x_pos, "Clock Speed: %d Mhz",
+  mvwprintw(tab_page, y_pos++, x_pos, "Clock Speed: %u Mhz",
             state->core_clock_mhz);
   y_pos++;
 
@@ -134,16 +136,16 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
 
   mvwprintw(tab_page, y_pos++, x_pos, "Memory: %'d MiB/%'d MiB",
             state->used_vram_mib, state->usable_vram_mib);
-  mvwprintw(tab_page, y_pos++, x_pos, "Memory Clock: %d Mhz",
+  mvwprintw(tab_page, y_pos++, x_pos, "Memory Clock: %u Mhz",
             state->memory_clock_mhz);
-  mvwprintw(tab_page, y_pos++, x_pos, "Controller Utilization: %d%%",
+  mvwprintw(tab_page, y_pos++, x_pos, "Controller Utilization: %u%%",
             state->mem_ctrl_util_percent);
   y_pos++;
 
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Thermals");
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "Fan Speed: %d%% (%d RPM)",
+  mvwprintw(tab_page, y_pos++, x_pos, "Fan Speed: %u%% (%u RPM)",
             state->fan_speed_percentage, state->fan_speed_rpm);
   mvwprintw(tab_page, y_pos++, x_pos, "Temperature: %d°C",
             state->temperature_celsius);
@@ -151,7 +153,7 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
   y_pos = 1;
   x_pos += cols / 2;
   mvwprintw(tab_page, y_pos++, x_pos, "P-State: %s", state->performance_state);
-  mvwprintw(tab_page, y_pos++, x_pos, "Encoder: %d%%   Decoder: %d%%",
+  mvwprintw(tab_page, y_pos++, x_pos, "Encoder: %u%%   Decoder: %u%%",
             state->encoder_util_percent, state->decoder_util_percent);
 }
 
@@ -160,22 +162,31 @@ static void draw_thermals_tab(WINDOW *tab_page) {}
 static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
   int y_pos = 1;
   int x_pos = 1;
+  wattr_set(tab_page, A_UNDERLINE, PAIR_HEADING, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "GPU Device Info");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Device:       %s", state->name);
+  mvwprintw(tab_page, y_pos++, x_pos, "Architecture: %s", state->architecture);
+  mvwprintw(tab_page, y_pos++, x_pos, "GPU Cores:    %u", state->num_gpu_cores);
+  mvwprintw(tab_page, y_pos++, x_pos, "VRAM:         %'d MiB (%'d MiB usable)",
+            state->total_vram_mib, state->usable_vram_mib);
+  mvwprintw(tab_page, y_pos++, x_pos, "PCIe:         Gen %u x%u",
+            state->pcie_max_link_generation, state->pcie_max_link_width);
+  mvwprintw(tab_page, y_pos++, x_pos, "Fan Ctrls:    %u",
+            state->num_fan_controllers);
+  mvwprintw(tab_page, y_pos++, x_pos, "TDP:          %u W",
+            state->tdp_milliwatts / 1000);
+  mvwprintw(tab_page, y_pos++, x_pos, "VBIOS:        %s", state->vbios_version);
+  ++y_pos;
+  wattr_set(tab_page, A_UNDERLINE, PAIR_HEADING, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Drivers");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Driver Version: %s",
             state->driver_version);
   mvwprintw(tab_page, y_pos++, x_pos, "NVML Version:   %s",
             state->nvml_version);
   mvwprintw(tab_page, y_pos++, x_pos, "CUDA Version:   %s",
             state->cuda_version);
-  ++y_pos;
-  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "GPU Device Info");
-  wattr_set(tab_page, A_NORMAL, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "Device:      %s", state->name);
-  mvwprintw(tab_page, y_pos++, x_pos, "Archtecture: %s", state->architecture);
-  mvwprintw(tab_page, y_pos++, x_pos, "VRAM:        %'d MiB (%'d MiB usable)",
-            state->total_vram_mib, state->usable_vram_mib);
-  mvwprintw(tab_page, y_pos++, x_pos, "PCIe:        Gen %d x%d",
-            state->pcie_max_link_generation, state->pcie_max_link_width);
 }
 
 static void draw_content(WINDOW *window, const GpuState *gpu_state) {

@@ -60,18 +60,20 @@ static int bytes_to_mib(unsigned long long bytes) {
 static void gpu_update_static_state(Gpu *gpu) {
   auto state = &gpu->state;
   auto device = gpu->handle;
-  auto last_status = NVML_SUCCESS;
+  nvmlReturn_t last_status = NVML_SUCCESS;
 
   static_assert(sizeof(state->driver_version) >=
                 NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE);
   last_status = nvmlSystemGetDriverVersion(state->driver_version,
                                            sizeof(state->driver_version));
   check_error(last_status, "Error retrieving driver version");
+
   static_assert(sizeof(state->nvml_version) >=
                 NVML_SYSTEM_NVML_VERSION_BUFFER_SIZE);
   last_status = nvmlSystemGetNVMLVersion(state->nvml_version,
                                          sizeof(state->nvml_version));
   check_error(last_status, "Error retrieving nvml version");
+
   int cuda_version = 0;
   last_status = nvmlSystemGetCudaDriverVersion(&cuda_version);
   if (!check_error(last_status, "Error retrieving CUDA version")) {
@@ -84,6 +86,12 @@ static void gpu_update_static_state(Gpu *gpu) {
   last_status = nvmlDeviceGetName(device, state->name, sizeof(state->name));
   check_error(last_status, "Error retrieving device name");
 
+  static_assert(sizeof(state->vbios_version) >=
+                NVML_DEVICE_VBIOS_VERSION_BUFFER_SIZE);
+  nvmlDeviceGetVbiosVersion(device, state->vbios_version,
+                            sizeof(state->vbios_version));
+  check_error(last_status, "Error retrieving vbios version");
+
   nvmlDeviceArchitecture_t arch = {0};
   last_status = nvmlDeviceGetArchitecture(device, &arch);
   check_error(last_status, "Error retrieving device architecture");
@@ -95,18 +103,28 @@ static void gpu_update_static_state(Gpu *gpu) {
   state->total_vram_mib = bytes_to_mib(memory.total);
   state->usable_vram_mib = bytes_to_mib(memory.total - memory.reserved);
 
+  last_status = nvmlDeviceGetNumFans(device, &state->num_fan_controllers);
+  check_error(last_status, "Error retrieving fan count");
+
+  last_status = nvmlDeviceGetNumGpuCores(device, &state->num_gpu_cores);
+  check_error(last_status, "Error retrieving gpu core count");
+
   last_status = nvmlDeviceGetMaxPcieLinkGeneration(
       device, &state->pcie_max_link_generation);
   check_error(last_status, "Error retrieving device pcie max link gen");
   last_status =
       nvmlDeviceGetMaxPcieLinkWidth(device, &state->pcie_max_link_width);
   check_error(last_status, "Error retrieving device pcie max link width");
+
+  last_status =
+      nvmlDeviceGetPowerManagementDefaultLimit(device, &state->tdp_milliwatts);
+  check_error(last_status, "Error retrieving device tdp");
 }
 
 static void gpu_update_dynamic_state(Gpu *gpu) {
   auto state = &gpu->state;
   auto device = gpu->handle;
-  auto last_status = NVML_SUCCESS;
+  nvmlReturn_t last_status = NVML_SUCCESS;
 
   nvmlMemory_v2_t memory = {.version = nvmlMemory_v2};
   last_status = nvmlDeviceGetMemoryInfo_v2(device, &memory);
@@ -172,14 +190,6 @@ Gpu *gpu_init() {
   if (check_error(last_status, "Error obtaining NVML device")) {
     exit(EXIT_FAILURE);
   }
-
-  //
-  // last_status = nvmlDeviceGetNumFans(device, &gpu_info.num_fans);
-  //
-  // check_error(last_status, "Error retrieving fan count");
-  //
-  // last_status = nvmlDeviceGetNumGpuCores(device, &gpu_info.num_gpu_cores);
-  // check_error(last_status, "Error retrieving gpu core count");
 
   Gpu *gpu = calloc(1, sizeof(Gpu));
   gpu->handle = device;

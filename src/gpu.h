@@ -6,6 +6,7 @@ typedef struct {
   char nvml_version[128];
   char cuda_version[128];
   char name[128];
+  char vbios_version[32];
   const char *architecture;
   int total_vram_mib;
   int usable_vram_mib;
@@ -17,15 +18,16 @@ typedef struct {
   unsigned int mem_ctrl_util_percent;
   unsigned int core_clock_mhz;
   unsigned int memory_clock_mhz;
-  unsigned int temperature_celsius;
+  int temperature_celsius;
   unsigned int fan_speed_percentage;
   unsigned int fan_speed_rpm;
   char performance_state[4]; // Ex: P0, P8, or ?
-  unsigned int num_fans;
+  unsigned int num_fan_controllers;
   unsigned int num_gpu_cores;
   unsigned int pcie_max_link_generation;
   unsigned int pcie_max_link_width;
   unsigned int pcie_max_link_speed_mbps;
+  unsigned int tdp_milliwatts;
 } GpuState;
 
 typedef struct Gpu Gpu;
