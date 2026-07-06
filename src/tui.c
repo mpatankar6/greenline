@@ -1,5 +1,6 @@
 #include "tui.h"
 #include "gpu.h"
+#include "tui_plot.h"
 #include <assert.h>
 #include <curses.h>
 #include <locale.h>
@@ -8,10 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char TITLE[] = "Greenline";
-static const int MIN_WIDTH = 80;
-static const int MIN_HEIGHT = 24;
-static const int POLL_MS = 500;
+static constexpr char TITLE[] = "Greenline";
+static constexpr int MIN_WIDTH = 80;
+static constexpr int MIN_HEIGHT = 24;
+static constexpr int POLL_MS = 500;
 
 enum {
   PAIR_TITLE = 1,
@@ -26,11 +27,8 @@ static void init_colors() {
   init_pair(PAIR_HEADING, COLOR_YELLOW, -1);
 }
 
-// typedef struct Tab {
-//   const char *name;
-// } Tab;
 typedef const char Tab[16];
-static const Tab TABS[] = {
+static constexpr Tab TABS[] = {
     {"General"},
     {"OC"},
     {"Thermals"},
@@ -226,17 +224,28 @@ void tui_run(Gpu *gpu) {
   if (!enforce_minimum_size()) {
     return;
   }
+  auto plot = plot_create();
   for (;;) {
     auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
+    auto plot_region =
+        derwin(tab_page, getmaxy(tab_page) - 14, getmaxx(tab_page), 14, 0);
+    assert(tab_page && plot_region); // Window creation can fail silently
+
     erase();
     draw_frame();
     gpu_update_state(gpu);
     draw_content(tab_page, gpu_get_state(gpu));
+    wrefresh(plot_region);
     wrefresh(tab_page);
+    plot_draw(plot, plot_region);
     refresh();
+
     delwin(tab_page);
+    delwin(plot_region);
+
     auto should_continue = handle_input();
     if (!should_continue) {
+      plot_destroy(plot);
       return;
     }
   }

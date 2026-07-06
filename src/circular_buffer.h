@@ -1,7 +1,7 @@
 #pragma once
 #include <stddef.h>
 
-enum { CIRCULAR_BUFFER_CAPACITY = 1024 };
+constexpr int CIRCULAR_BUFFER_CAPACITY = 1024;
 
 typedef struct CircularBuffer CircularBuffer;
 

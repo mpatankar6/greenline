@@ -19,6 +19,7 @@ add_executable(greenline
   src/main.c
   src/gpu.c
   src/tui.c
+  src/tui_plot.c
   src/circular_buffer.c
 )
 
