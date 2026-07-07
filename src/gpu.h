@@ -8,20 +8,20 @@ typedef struct {
   char name[128];
   char vbios_version[32];
   const char *architecture;
-  int total_vram_mib;
-  int usable_vram_mib;
-  int used_vram_mib;
-  int free_vram_mib;
+  unsigned int total_vram_mib;
+  unsigned int usable_vram_mib;
+  unsigned int used_vram_mib;
+  unsigned int free_vram_mib;
   unsigned int encoder_util_percent;
   unsigned int decoder_util_percent;
   unsigned int gpu_util_percent;
   unsigned int mem_ctrl_util_percent;
   unsigned int core_clock_mhz;
   unsigned int memory_clock_mhz;
-  int temperature_celsius;
+  unsigned int temperature_celsius;
   unsigned int fan_speed_percentage;
   unsigned int fan_speed_rpm;
-  char performance_state[4]; // Ex: P0, P8, or ?
+  char performance_state[4]; // Ex: "P0", "P8", or "?"
   unsigned int num_fan_controllers;
   unsigned int num_gpu_cores;
   unsigned int pcie_max_link_generation;

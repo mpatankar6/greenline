@@ -1,29 +1,43 @@
 #include "tui_plot.h"
 #include "circular_buffer.h"
+#include "gpu.h"
 #include <assert.h>
 #include <curses.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#define OFFSET_AND_TYPE(field)                                                 \
+  offsetof(GpuState, field), _Generic((typeof((GpuState){0}.field)){0},        \
+      unsigned int: DS_UINT,                                                   \
+      double: DS_DOUBLE)
+
+typedef enum { DS_UINT, DS_DOUBLE } DSType;
+
 typedef struct DataSource {
   char name[32];
   char unit[4];
   int lower;
   int upper;
-  void *value;
+  size_t offset;
+  DSType type;
 } DataSource;
 
-static constexpr DataSource SOURCES[] = {{"GPU Clock", "Mhz", 0, 100, nullptr}};
+static constexpr DataSource SOURCES[] = {
+    {"GPU Clock", "Mhz", 0, 100, OFFSET_AND_TYPE(core_clock_mhz)},
+    {"GPU Temp", "°C", 0, 95, OFFSET_AND_TYPE(temperature_celsius)}};
 static constexpr size_t SOURCE_COUNT = sizeof(SOURCES) / sizeof(DataSource);
 
 static constexpr int NUM_TICK_LABELS = 5;
 
 struct Plot {
   CircularBuffer *data;
+  GpuState *gpu_state;
   Plot *paired;
   DataSource data_source;
 };
+
+static void plot_draw_data(Plot *plot, WINDOW *window) {}
 
 static void plot_draw_pane(Plot *plot, WINDOW *window) {
   int cols = getmaxx(window);
@@ -59,6 +73,7 @@ static void plot_draw_pane(Plot *plot, WINDOW *window) {
   auto data_pane =
       derwin(window, plot_rows, plot_cols, rows - plot_rows, x_offset);
   box(data_pane, 0, 0);
+  plot_draw_data(plot, data_pane);
   delwin(data_pane);
 }
 
@@ -67,6 +82,20 @@ Plot *plot_create() {
   plot->data = circular_buffer_create();
   plot->data_source = SOURCES[0];
   return plot;
+}
+
+void plot_update(Plot *plot, const GpuState *state) {
+  auto value_address = (char *)state + plot->data_source.offset;
+  switch (plot->data_source.type) {
+  case DS_UINT:
+    circular_buffer_put(plot->data, (int)*(unsigned int *)value_address);
+    break;
+  case DS_DOUBLE:
+    circular_buffer_put(plot->data, (int)*(double *)value_address);
+    break;
+  }
+  FILE *file_ptr = fopen("output.txt", "a");
+  fprintf(file_ptr, "%d\n", circular_buffer_get(plot->data));
 }
 
 Plot *plot_configure() {}

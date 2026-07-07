@@ -187,19 +187,25 @@ static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
             state->cuda_version);
 }
 
-static void draw_content(WINDOW *window, const GpuState *gpu_state) {
+static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
+                         Plot *plot) {
   switch (selected_tab_index) {
   case 1:
-    draw_general_tab(window, gpu_state);
+    draw_general_tab(tab_page, gpu_state);
+    auto plot_region =
+        derwin(tab_page, getmaxy(tab_page) - 14, getmaxx(tab_page), 14, 0);
+    // plot_load_config(PLOT_CONFIG_GENERAL)
+    plot_draw(plot, plot_region);
+    delwin(plot_region);
     break;
   case 2:
-    draw_oc_tab(window);
+    draw_oc_tab(tab_page);
     break;
   case 3:
-    draw_thermals_tab(window);
+    draw_thermals_tab(tab_page);
     break;
   case 4:
-    draw_info_tab(window, gpu_state);
+    draw_info_tab(tab_page, gpu_state);
     break;
   default:
     return;
@@ -227,22 +233,14 @@ void tui_run(Gpu *gpu) {
   auto plot = plot_create();
   for (;;) {
     auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
-    auto plot_region =
-        derwin(tab_page, getmaxy(tab_page) - 14, getmaxx(tab_page), 14, 0);
-    assert(tab_page && plot_region); // Window creation can fail silently
-
+    auto gpu_state = gpu_get_state(gpu);
     erase();
     draw_frame();
     gpu_update_state(gpu);
-    draw_content(tab_page, gpu_get_state(gpu));
-    wrefresh(plot_region);
-    wrefresh(tab_page);
-    plot_draw(plot, plot_region);
+    plot_update(plot, gpu_state);
+    draw_content(tab_page, gpu_state, plot);
     refresh();
-
     delwin(tab_page);
-    delwin(plot_region);
-
     auto should_continue = handle_input();
     if (!should_continue) {
       plot_destroy(plot);
