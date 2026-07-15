@@ -3,6 +3,7 @@
 #include "gpu.h"
 #include <assert.h>
 #include <curses.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +25,7 @@ typedef struct DataSource {
 } DataSource;
 
 static constexpr DataSource SOURCES[] = {
-    {"GPU Clock", "Mhz", 0, 100, OFFSET_AND_TYPE(core_clock_mhz)},
+    {"GPU Clock", "Mhz", 0, 100, OFFSET_AND_TYPE(gpu_util_percent)},
     {"GPU Temp", "°C", 0, 95, OFFSET_AND_TYPE(temperature_celsius)}};
 static constexpr size_t SOURCE_COUNT = sizeof(SOURCES) / sizeof(DataSource);
 
@@ -37,7 +38,54 @@ struct Plot {
   DataSource data_source;
 };
 
-static void plot_draw_data(Plot *plot, WINDOW *window) {}
+static void draw_data_point(int x_coord, int y_coord, int last_y_coord,
+                            WINDOW *window) {
+#define FLIP(y_coord) (getmaxy(window) - 1 - (y_coord))
+  if (last_y_coord == -1) {
+    mvwaddch(window, FLIP(y_coord), x_coord, ACS_HLINE);
+    return;
+  }
+  int height_difference = y_coord - last_y_coord;
+  int height_distance = abs(height_difference);
+  if (height_difference > 0) { // Draw down
+    // mvwvline(window, FLIP(y_coord), x_coord, height_distance, ACS_VLINE);
+    mvwvline(window, FLIP(y_coord), x_coord, ACS_VLINE, height_distance);
+    mvwaddch(window, FLIP(y_coord), x_coord, ACS_URCORNER);
+    mvwaddch(window, FLIP(last_y_coord), x_coord, ACS_LLCORNER);
+  } else if (height_difference < 0) { // Draw up
+    mvwvline(window, FLIP(last_y_coord), x_coord, ACS_VLINE, height_distance);
+    mvwaddch(window, FLIP(y_coord), x_coord, ACS_LRCORNER);
+    mvwaddch(window, FLIP(last_y_coord), x_coord, ACS_ULCORNER);
+  } else { // Draw straight
+    mvwaddch(window, FLIP(y_coord), x_coord, ACS_HLINE);
+  }
+#undef FLIP
+}
+
+static void draw_data_line(Plot *plot, WINDOW *window) {
+  wattr_set(window, A_BOLD, 1, nullptr);
+  int rows = getmaxy(window);
+  int cols = getmaxx(window) - 2; // Account for side borders
+  size_t buffer_size = circular_buffer_size(plot->data);
+  // Draw as much as we can, ie min(number of columns, number of data points)
+  size_t points_to_draw =
+      (size_t)cols < buffer_size ? (size_t)cols : buffer_size;
+  // Clamp right edge to the last column
+  int x_pos = (int)points_to_draw < cols ? (int)points_to_draw : cols;
+  int last_height = -1; // Sentinel value used to indicate first height
+  int data_point_range = plot->data_source.upper - plot->data_source.lower;
+  assert(data_point_range > 0);
+  for (size_t i = 0; i < points_to_draw; ++i, --x_pos) {
+    int data_point = circular_buffer_peek(plot->data, i);
+    // Y-pos assumes bottom-left origin, can be flipped later.
+    int y_pos = (int)roundl((double)(rows - 1) * data_point / data_point_range);
+    y_pos = y_pos >= rows ? rows - 1 : y_pos; // Clamp y_pos
+
+    draw_data_point(x_pos, y_pos, last_height, window);
+    last_height = y_pos;
+  }
+  wattr_set(window, A_NORMAL, 0, nullptr);
+}
 
 static void plot_draw_pane(Plot *plot, WINDOW *window) {
   int cols = getmaxx(window);
@@ -62,6 +110,7 @@ static void plot_draw_pane(Plot *plot, WINDOW *window) {
     value += data_step;
   }
 
+  // Draw plot border and title
   int x_offset = longest_tick_label_len;
   int plot_cols = cols - x_offset;
   int plot_rows = (row_step * (NUM_TICK_LABELS - 1)) + 1;
@@ -73,7 +122,7 @@ static void plot_draw_pane(Plot *plot, WINDOW *window) {
   auto data_pane =
       derwin(window, plot_rows, plot_cols, rows - plot_rows, x_offset);
   box(data_pane, 0, 0);
-  plot_draw_data(plot, data_pane);
+  draw_data_line(plot, data_pane);
   delwin(data_pane);
 }
 
@@ -94,8 +143,6 @@ void plot_update(Plot *plot, const GpuState *state) {
     circular_buffer_put(plot->data, (int)*(double *)value_address);
     break;
   }
-  FILE *file_ptr = fopen("output.txt", "a");
-  fprintf(file_ptr, "%d\n", circular_buffer_get(plot->data));
 }
 
 Plot *plot_configure() {}
