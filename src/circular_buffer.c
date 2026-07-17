@@ -33,6 +33,16 @@ size_t circular_buffer_size(const CircularBuffer *buffer) {
   return buffer->size;
 }
 
+int circular_buffer_peek(const CircularBuffer *buffer,
+                         size_t offset_from_newest) {
+  auto modulus = CIRCULAR_BUFFER_CAPACITY;
+  auto read_index = (int)buffer->writeIndex - 1 - (int)offset_from_newest;
+  auto wrapped_read_index = ((read_index % modulus) + modulus) % modulus;
+  assert(wrapped_read_index >= 0 &&
+         wrapped_read_index < CIRCULAR_BUFFER_CAPACITY);
+  return buffer->buffer[wrapped_read_index];
+}
+
 int circular_buffer_get(CircularBuffer *buffer) {
   auto value = buffer->buffer[buffer->readIndex++];
   buffer->readIndex %= CIRCULAR_BUFFER_CAPACITY;

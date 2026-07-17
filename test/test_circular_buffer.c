@@ -80,6 +80,23 @@ static void test_wrap_around_twice() {
   circular_buffer_destroy(buffer);
 }
 
+static void test_peek_does_not_consume() {
+  auto buffer = circular_buffer_create();
+  circular_buffer_put(buffer, 10);
+  assert(circular_buffer_peek(buffer, 0) == 10);
+  assert(circular_buffer_get(buffer) == 10);
+}
+
+static void test_peek_backwards_ordering() {
+  auto buffer = circular_buffer_create();
+  for (int i = 0; i < CIRCULAR_BUFFER_CAPACITY; ++i) {
+    circular_buffer_put(buffer, i);
+  }
+  for (int i = 0; i < CIRCULAR_BUFFER_CAPACITY; ++i) {
+    assert(circular_buffer_peek(buffer, i) == CIRCULAR_BUFFER_CAPACITY - 1 - i);
+  }
+}
+
 int main(void) {
   test_new_buffer_has_size_zero();
   test_get_on_empty_returns_sentinel();
@@ -89,5 +106,7 @@ int main(void) {
   test_size_caps_at_capacity();
   test_oldest_value_overwritten_on_overflow();
   test_wrap_around_twice();
+  test_peek_does_not_consume();
+  test_peek_backwards_ordering();
   return 0;
 }
