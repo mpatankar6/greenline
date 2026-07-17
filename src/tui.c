@@ -8,11 +8,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static constexpr char TITLE[] = "Greenline";
 static constexpr int MIN_WIDTH = 80;
 static constexpr int MIN_HEIGHT = 24;
-static constexpr int POLL_MS = 500;
+
+static unsigned int poll_ms = 2000;
 
 enum {
   PAIR_TITLE = 1,
@@ -60,15 +62,21 @@ static ShouldContinue enforce_minimum_size() {
   return true;
 }
 
-static ShouldContinue handle_input() {
-  auto input = getch();
+static ShouldContinue handle_input(int input) {
   if (input >= '1' && input <= '4') {
-    selected_tab_index = input - '0';
+    selected_tab_index = (size_t)(input - '0');
     return true;
   }
   switch (input) {
   case KEY_RESIZE:
     return enforce_minimum_size();
+  case '=':
+  case '+':
+    poll_ms = poll_ms < 5000 ? poll_ms + 100 : poll_ms;
+    break;
+  case '-':
+    poll_ms = poll_ms > 100 ? poll_ms - 100 : poll_ms;
+    break;
   case 'q':
     return false;
   default:
@@ -83,22 +91,31 @@ static void draw_tab_line() {
   int x_pos = 2;
   for (size_t tab_index = 1; tab_index <= TAB_COUNT; ++tab_index) {
     auto tab = TABS[tab_index - 1];
-    char name[256];
-    (void)snprintf(name, sizeof(name), " [%zu] %s ", tab_index, tab);
+    char buffer[256];
+    (void)snprintf(buffer, sizeof(buffer), " [%zu] %s ", tab_index, tab);
     if (tab_index == selected_tab_index) {
       attr_set(A_BOLD, PAIR_SELECTED_TAB, nullptr);
     }
-    mvprintw(0, x_pos, "%s", name);
-    x_pos += (int)strlen(name);
+    mvprintw(0, x_pos, "%s", buffer);
+    x_pos += (int)strlen(buffer);
     attr_set(A_NORMAL, 0, nullptr);
   }
 }
 
 static void draw_title() {
-  int x_pos = COLS - (int)strlen(TITLE) - 4;
+  char buffer[16];
+  (void)snprintf(buffer, sizeof(buffer), " %s ", TITLE);
+  int x_pos = COLS - (int)strlen(buffer) - 2;
   attr_set(A_BOLD, PAIR_TITLE, nullptr);
-  mvprintw(0, x_pos, " %s ", TITLE);
+  mvprintw(0, x_pos, "%s", buffer);
   attr_set(A_NORMAL, 0, nullptr);
+}
+
+static void draw_poll_controls() {
+  char buffer[64];
+  (void)snprintf(buffer, sizeof(buffer), " [-] %ums [+] ", poll_ms);
+  int x_pos = COLS - (int)strlen(buffer) - 2;
+  mvprintw(LINES - 1, x_pos, "%s", buffer);
 }
 
 static void draw_frame() {
@@ -112,6 +129,7 @@ static void draw_frame() {
   mvaddch(LINES - 1, COLS - 1, ACS_LRCORNER);
   draw_tab_line();
   draw_title();
+  draw_poll_controls();
 }
 
 static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
@@ -132,7 +150,7 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
   mvwprintw(tab_page, y_pos++, x_pos, "Memory");
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
 
-  mvwprintw(tab_page, y_pos++, x_pos, "Memory: %'d MiB/%'d MiB",
+  mvwprintw(tab_page, y_pos++, x_pos, "Memory: %'u MiB/%'u MiB",
             state->used_vram_mib, state->usable_vram_mib);
   mvwprintw(tab_page, y_pos++, x_pos, "Memory Clock: %u Mhz",
             state->memory_clock_mhz);
@@ -145,7 +163,7 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Fan Speed: %u%% (%u RPM)",
             state->fan_speed_percentage, state->fan_speed_rpm);
-  mvwprintw(tab_page, y_pos++, x_pos, "Temperature: %d°C",
+  mvwprintw(tab_page, y_pos++, x_pos, "Temperature: %u°C",
             state->temperature_celsius);
   // Switch columns
   y_pos = 1;
@@ -166,7 +184,7 @@ static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
   mvwprintw(tab_page, y_pos++, x_pos, "Device:       %s", state->name);
   mvwprintw(tab_page, y_pos++, x_pos, "Architecture: %s", state->architecture);
   mvwprintw(tab_page, y_pos++, x_pos, "GPU Cores:    %u", state->num_gpu_cores);
-  mvwprintw(tab_page, y_pos++, x_pos, "VRAM:         %'d MiB (%'d MiB usable)",
+  mvwprintw(tab_page, y_pos++, x_pos, "VRAM:         %'u MiB (%'u MiB usable)",
             state->total_vram_mib, state->usable_vram_mib);
   mvwprintw(tab_page, y_pos++, x_pos, "PCIe:         Gen %u x%u",
             state->pcie_max_link_generation, state->pcie_max_link_width);
@@ -222,30 +240,58 @@ void tui_init() {
   cbreak();
   noecho();
   keypad(stdscr, true);
+  nodelay(stdscr, true);
   curs_set(0);
-  timeout(POLL_MS);
+}
+
+static unsigned long get_time_ms() {
+  struct timespec time;
+  clock_gettime(CLOCK_MONOTONIC, &time);
+  return ((unsigned long)time.tv_sec * 1'000ULL) +
+         ((unsigned long)time.tv_nsec / 1'000'000ULL);
+}
+
+static void draw(const GpuState *gpu_state, Plot *plot) {
+  auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
+  erase();
+  draw_frame();
+  draw_content(tab_page, gpu_state, plot);
+  refresh();
+  delwin(tab_page);
 }
 
 void tui_run(Gpu *gpu) {
-  if (!enforce_minimum_size()) {
-    return;
-  }
+  static const struct timespec DURATION_10MS = {.tv_sec = 0,
+                                                .tv_nsec = 15 * 1'000'000L};
+  unsigned long current_time_ms = get_time_ms();
+  unsigned long last_update_time_ms = current_time_ms;
   auto plot = plot_create();
+
+  gpu_update_state(gpu);
+  plot_update(plot, gpu_get_state(gpu));
+
   for (;;) {
-    auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
-    auto gpu_state = gpu_get_state(gpu);
-    erase();
-    draw_frame();
-    gpu_update_state(gpu);
-    plot_update(plot, gpu_state);
-    draw_content(tab_page, gpu_state, plot);
-    refresh();
-    delwin(tab_page);
-    auto should_continue = handle_input();
-    if (!should_continue) {
-      plot_destroy(plot);
+    if (!enforce_minimum_size()) {
       return;
     }
+    int current_key = ERR;
+    while ((current_key = getch()) != ERR) {
+      auto should_continue = handle_input(current_key);
+      if (!should_continue) {
+        plot_destroy(plot);
+        return;
+      }
+    }
+    current_time_ms = get_time_ms();
+    unsigned long elapsed_time = current_time_ms - last_update_time_ms;
+    auto gpu_state = gpu_get_state(gpu);
+    if (elapsed_time >= poll_ms) {
+      gpu_update_state(gpu);
+      plot_update(plot, gpu_state);
+      last_update_time_ms = current_time_ms;
+    }
+    draw(gpu_state, plot);
+    nanosleep(&DURATION_10MS, nullptr);
   }
 }
 
