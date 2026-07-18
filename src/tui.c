@@ -15,6 +15,7 @@ static constexpr int MIN_WIDTH = 80;
 static constexpr int MIN_HEIGHT = 24;
 
 static unsigned int poll_ms = 2000;
+static bool modal_active = false;
 
 enum {
   PAIR_TITLE = 1,
@@ -29,15 +30,8 @@ static void init_colors() {
   init_pair(PAIR_HEADING, COLOR_YELLOW, -1);
 }
 
-typedef const char Tab[16];
-static constexpr Tab TABS[] = {
-    {"General"},
-    {"OC"},
-    {"Thermals"},
-    {"Info"},
-};
-static constexpr size_t TAB_COUNT = (sizeof(TABS) / sizeof(TABS[0]));
-static size_t selected_tab_index = 1;
+enum SelectedTab { GENERAL = 1, OC, THERMALS, INFO };
+static enum SelectedTab selected_tab = GENERAL;
 
 typedef bool ShouldContinue;
 
@@ -64,7 +58,8 @@ static ShouldContinue enforce_minimum_size() {
 
 static ShouldContinue handle_input(int input) {
   if (input >= '1' && input <= '4') {
-    selected_tab_index = (size_t)(input - '0');
+    selected_tab = (enum SelectedTab)(input - '0');
+    modal_active = false;
     return true;
   }
   switch (input) {
@@ -77,6 +72,11 @@ static ShouldContinue handle_input(int input) {
   case '-':
     poll_ms = poll_ms > 100 ? poll_ms - 100 : poll_ms;
     break;
+  case 'c':
+    if (selected_tab != INFO) {
+      modal_active = (bool)!modal_active;
+    }
+    break;
   case 'q':
     return false;
   default:
@@ -88,12 +88,20 @@ static ShouldContinue handle_input(int input) {
 }
 
 static void draw_tab_line() {
+  static constexpr char TABS[][16] = {
+      {"General"},
+      {"OC"},
+      {"Thermals"},
+      {"Info"},
+  };
+  static constexpr size_t TAB_COUNT = (sizeof(TABS) / sizeof(TABS[0]));
+
   int x_pos = 2;
   for (size_t tab_index = 1; tab_index <= TAB_COUNT; ++tab_index) {
-    auto tab = TABS[tab_index - 1];
-    char buffer[256];
-    (void)snprintf(buffer, sizeof(buffer), " [%zu] %s ", tab_index, tab);
-    if (tab_index == selected_tab_index) {
+    auto tab_name = TABS[tab_index - 1];
+    char buffer[64];
+    (void)snprintf(buffer, sizeof(buffer), " [%zu] %s ", tab_index, tab_name);
+    if (tab_index == selected_tab) {
       attr_set(A_BOLD, PAIR_SELECTED_TAB, nullptr);
     }
     mvprintw(0, x_pos, "%s", buffer);
@@ -112,10 +120,18 @@ static void draw_title() {
 }
 
 static void draw_poll_controls() {
-  char buffer[64];
+  char buffer[16];
   (void)snprintf(buffer, sizeof(buffer), " [-] %ums [+] ", poll_ms);
   int x_pos = COLS - (int)strlen(buffer) - 2;
   mvprintw(LINES - 1, x_pos, "%s", buffer);
+}
+
+static void draw_configuration_modal_toggle() {
+  if (modal_active) {
+    attr_set(A_BOLD, PAIR_SELECTED_TAB, nullptr);
+  }
+  mvprintw(LINES - 1, 4, "%s", "[c]onfigure plot");
+  attr_set(A_NORMAL, 0, nullptr);
 }
 
 static void draw_frame() {
@@ -130,6 +146,9 @@ static void draw_frame() {
   draw_tab_line();
   draw_title();
   draw_poll_controls();
+  if (selected_tab != INFO) { // Tab 4 is the info tab
+    draw_configuration_modal_toggle();
+  }
 }
 
 static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
@@ -207,7 +226,7 @@ static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
 
 static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
                          Plot *plot) {
-  switch (selected_tab_index) {
+  switch (selected_tab) {
   case 1:
     draw_general_tab(tab_page, gpu_state);
     auto plot_region =
@@ -252,17 +271,39 @@ static unsigned long get_time_ms() {
 }
 
 static void draw(const GpuState *gpu_state, Plot *plot) {
-  auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
   erase();
+
   draw_frame();
+  auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
   draw_content(tab_page, gpu_state, plot);
-  refresh();
+
+  wnoutrefresh(stdscr);
+
+  if (modal_active) {
+    int parent_x = getmaxx(tab_page);
+    int parent_y = getmaxy(tab_page);
+
+    int height = parent_y / 2;
+    int width = (parent_x * 2) / 3;
+    auto modal_window = derwin(tab_page, height, width, (parent_y - height) / 2,
+                               (parent_x - width) / 2);
+    assert(modal_window != NULL); // Modal should be in bounds
+    plot_configure(plot, modal_window);
+
+    wnoutrefresh(modal_window);
+    doupdate();
+
+    delwin(modal_window);
+  } else {
+    doupdate();
+  }
+
   delwin(tab_page);
 }
 
 void tui_run(Gpu *gpu) {
-  static const struct timespec DURATION_10MS = {.tv_sec = 0,
-                                                .tv_nsec = 15 * 1'000'000L};
+  static constexpr struct timespec SLEEP_DURATION = {
+      .tv_sec = 0, .tv_nsec = 15 * 1'000'000L};
   unsigned long current_time_ms = get_time_ms();
   unsigned long last_update_time_ms = current_time_ms;
   auto plot = plot_create();
@@ -276,8 +317,18 @@ void tui_run(Gpu *gpu) {
     }
     int current_key = ERR;
     while ((current_key = getch()) != ERR) {
+      // Because the modal and the main window have disjoint sets of control
+      // keys, we can just process one after an other, with special behavior for
+      // quitting when the modal is active
       auto should_continue = handle_input(current_key);
+      if (modal_active) {
+        plot_configure_model_handle_input(plot, current_key);
+      }
       if (!should_continue) {
+        if (modal_active) {
+          modal_active = false;
+          continue;
+        }
         plot_destroy(plot);
         return;
       }
@@ -291,7 +342,7 @@ void tui_run(Gpu *gpu) {
       last_update_time_ms = current_time_ms;
     }
     draw(gpu_state, plot);
-    nanosleep(&DURATION_10MS, nullptr);
+    nanosleep(&SLEEP_DURATION, nullptr);
   }
 }
 

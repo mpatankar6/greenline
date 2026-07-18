@@ -145,7 +145,13 @@ void plot_update(Plot *plot, const GpuState *state) {
   }
 }
 
-Plot *plot_configure() {}
+void plot_configure(Plot* plot, WINDOW* window) {
+  werase(window);
+  box(window, 0, 0);
+}
+
+void plot_configure_model_handle_input(Plot *plot, int key) {
+}
 
 void plot_draw(Plot *plot, WINDOW *window) {
   int cols = getmaxx(window);
