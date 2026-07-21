@@ -1,6 +1,8 @@
 CompileFlags:
   CompilationDatabase: build
 Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
   ClangTidy:
     Add: ['bugprone-*', 'cert-*', 'readability-*', 'misc-*', 'portability-*']
     Remove: ['readability-magic-numbers'] # Too many false positives
