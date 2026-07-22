@@ -21,6 +21,8 @@ add_executable(greenline
   src/tui.c
   src/tui_plot.c
   src/circular_buffer.c
+  src/plot_controller.c
+  src/config_modal.c
 )
 
 include(CheckIPOSupported)

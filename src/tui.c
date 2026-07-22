@@ -1,5 +1,8 @@
 #include "tui.h"
+#include "colors.h"
+#include "config_modal.h"
 #include "gpu.h"
+#include "plot_controller.h"
 #include "tui_plot.h"
 #include <assert.h>
 #include <curses.h>
@@ -17,16 +20,11 @@ static constexpr int MIN_HEIGHT = 24;
 static unsigned int poll_ms = 2000;
 static bool modal_active = false;
 
-enum {
-  PAIR_TITLE = 1,
-  PAIR_SELECTED_TAB,
-  PAIR_HEADING,
-};
 static void init_colors() {
   start_color();
   use_default_colors();
   init_pair(PAIR_TITLE, COLOR_GREEN, -1);
-  init_pair(PAIR_SELECTED_TAB, COLOR_BLUE, -1);
+  init_pair(PAIR_SELECTION, COLOR_BLUE, -1);
   init_pair(PAIR_HEADING, COLOR_YELLOW, -1);
 }
 
@@ -102,7 +100,7 @@ static void draw_tab_line() {
     char buffer[64];
     (void)snprintf(buffer, sizeof(buffer), " [%zu] %s ", tab_index, tab_name);
     if (tab_index == selected_tab) {
-      attr_set(A_BOLD, PAIR_SELECTED_TAB, nullptr);
+      attr_set(A_BOLD, PAIR_SELECTION, nullptr);
     }
     mvprintw(0, x_pos, "%s", buffer);
     x_pos += (int)strlen(buffer);
@@ -128,7 +126,7 @@ static void draw_poll_controls() {
 
 static void draw_configuration_modal_toggle() {
   if (modal_active) {
-    attr_set(A_BOLD, PAIR_SELECTED_TAB, nullptr);
+    attr_set(A_BOLD, PAIR_SELECTION, nullptr);
   }
   mvprintw(LINES - 1, 4, "%s", "[c]onfigure plot");
   attr_set(A_NORMAL, 0, nullptr);
@@ -270,7 +268,8 @@ static unsigned long get_time_ms() {
          ((unsigned long)time.tv_nsec / 1'000'000ULL);
 }
 
-static void draw(const GpuState *gpu_state, Plot *plot) {
+static void draw(const GpuState *gpu_state, Plot *plot,
+                 ConfigModal *config_modal) {
   erase();
 
   draw_frame();
@@ -287,8 +286,8 @@ static void draw(const GpuState *gpu_state, Plot *plot) {
     int width = (parent_x * 2) / 3;
     auto modal_window = derwin(tab_page, height, width, (parent_y - height) / 2,
                                (parent_x - width) / 2);
-    assert(modal_window != NULL); // Modal should be in bounds
-    plot_configure(plot, modal_window);
+    assert(modal_window);
+    config_modal_draw(config_modal, modal_window);
 
     wnoutrefresh(modal_window);
     doupdate();
@@ -307,6 +306,8 @@ void tui_run(Gpu *gpu) {
   unsigned long current_time_ms = get_time_ms();
   unsigned long last_update_time_ms = current_time_ms;
   auto plot = plot_create();
+  auto plot_controller = plot_controller_create();
+  auto config_modal = plot_controller_get_config_modal(plot_controller);
 
   gpu_update_state(gpu);
   plot_update(plot, gpu_get_state(gpu));
@@ -317,12 +318,12 @@ void tui_run(Gpu *gpu) {
     }
     int current_key = ERR;
     while ((current_key = getch()) != ERR) {
-      // Because the modal and the main window have disjoint sets of control
-      // keys, we can just process one after an other, with special behavior for
+      // Because the modal and the main window have disjoint sets of controls
+      // we can just process one after an other, with special behavior for
       // quitting when the modal is active
       auto should_continue = handle_input(current_key);
       if (modal_active) {
-        plot_configure_model_handle_input(plot, current_key);
+        config_modal_handle_input(config_modal, current_key);
       }
       if (!should_continue) {
         if (modal_active) {
@@ -330,6 +331,7 @@ void tui_run(Gpu *gpu) {
           continue;
         }
         plot_destroy(plot);
+        plot_controller_destroy(plot_controller);
         return;
       }
     }
@@ -341,7 +343,7 @@ void tui_run(Gpu *gpu) {
       plot_update(plot, gpu_state);
       last_update_time_ms = current_time_ms;
     }
-    draw(gpu_state, plot);
+    draw(gpu_state, plot, config_modal);
     nanosleep(&SLEEP_DURATION, nullptr);
   }
 }
