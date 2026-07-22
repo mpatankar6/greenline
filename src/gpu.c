@@ -52,9 +52,9 @@ static const char *arch_to_string(nvmlDeviceArchitecture_t arch) {
   }
 }
 
-static int bytes_to_mib(unsigned long long bytes) {
+static unsigned int bytes_to_mib(unsigned long long bytes) {
   const int BYTES_PER_MIB = 1024 * 1024;
-  return (int)(bytes / BYTES_PER_MIB);
+  return (unsigned int)(bytes / BYTES_PER_MIB);
 }
 
 static void gpu_update_static_state(Gpu *gpu) {
@@ -62,6 +62,11 @@ static void gpu_update_static_state(Gpu *gpu) {
   auto device = gpu->handle;
   nvmlReturn_t last_status = NVML_SUCCESS;
 
+  // Why static asserts here instead of just using these macro values directly
+  // in the struct? So that nvml remains an implementation detail of this file,
+  // and we don't leak nvml.h all over the place. As a bonus this allows us to
+  // theoretically be able to sub in a different implementation of this file for
+  // AMD support, though it likely'll never happen.
   static_assert(sizeof(state->driver_version) >=
                 NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE);
   last_status = nvmlSystemGetDriverVersion(state->driver_version,
@@ -119,6 +124,14 @@ static void gpu_update_static_state(Gpu *gpu) {
   last_status =
       nvmlDeviceGetPowerManagementDefaultLimit(device, &state->tdp_milliwatts);
   check_error(last_status, "Error retrieving device tdp");
+
+  last_status = nvmlDeviceGetMaxClockInfo(device, NVML_CLOCK_GRAPHICS,
+                                          &state->max_core_clock_mhz);
+  check_error(last_status, "Error retrieving max core clock");
+
+  last_status = nvmlDeviceGetMaxClockInfo(device, NVML_CLOCK_MEM,
+                                          &state->max_memory_clock_mhz);
+  check_error(last_status, "Error retrieving max memory clock");
 }
 
 static void gpu_update_dynamic_state(Gpu *gpu) {
@@ -170,13 +183,13 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
   };
   last_status = nvmlDeviceGetTemperatureV(device, &temperature_info);
   check_error(last_status, "Error retrieving device temperature");
-  state->temperature_celsius = temperature_info.temperature;
+  state->temperature_celsius = (unsigned int)temperature_info.temperature;
 
   nvmlPstates_t pstate = NVML_PSTATE_UNKNOWN;
   last_status = nvmlDeviceGetPerformanceState(device, &pstate);
   check_error(last_status, "Error retrieving device pstate");
   (void)snprintf(state->performance_state, sizeof(state->performance_state),
-                 pstate == NVML_PSTATE_UNKNOWN ? "?" : "P%d", pstate);
+                 pstate == NVML_PSTATE_UNKNOWN ? "?" : "P%u", pstate);
 }
 
 Gpu *gpu_init() {
@@ -201,8 +214,8 @@ Gpu *gpu_init() {
 const GpuState *gpu_get_state(const Gpu *gpu) { return &gpu->state; }
 
 void gpu_update_state(Gpu *gpu) {
-  /** Splitting into static and dynamic updates allows us to not waste nvml
-  calls on stuff doesn't change.*/
+  // Splitting into static and dynamic updates allows us to not waste nvml
+  // calls on stuff doesn't change.
   if (!gpu->state.initialized) {
     gpu_update_static_state(gpu);
     gpu->state.initialized = true;

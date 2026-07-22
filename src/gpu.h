@@ -18,6 +18,8 @@ typedef struct {
   unsigned int mem_ctrl_util_percent;
   unsigned int core_clock_mhz;
   unsigned int memory_clock_mhz;
+  unsigned int max_core_clock_mhz;
+  unsigned int max_memory_clock_mhz;
   unsigned int temperature_celsius;
   unsigned int fan_speed_percentage;
   unsigned int fan_speed_rpm;
