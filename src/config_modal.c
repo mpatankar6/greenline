@@ -16,8 +16,6 @@ struct ConfigModal {
   size_t longest_source_name;
 };
 
-typedef enum { MODAL_LEFT, MODAL_RIGHT } ModalSide;
-
 static DataSource get_selected_source(const ConfigModal *modal,
                                       ModalSide side) {
   switch (side) {
@@ -102,7 +100,7 @@ void config_modal_handle_input(ConfigModal *config_modal, int key) {
     break;
   case KEY_DOWN:
   case 'j':
-    *row = *row < (int)SOURCE_COUNT - 1 ? *row + 1 : *row;
+    *row = *row < (int)SOURCE_COUNT - 2 ? *row + 1 : *row;
     break;
   case KEY_UP:
   case 'k':
@@ -113,7 +111,14 @@ void config_modal_handle_input(ConfigModal *config_modal, int key) {
     *col = 1;
     break;
   case ' ':
-    // TODO selection code
+    auto side = (ModalSide)*col;
+    auto selection = SOURCES[*row];
+    if (side != MODAL_LEFT && // The left plot should exist at minimum
+        sources_equal(selection, get_selected_source(config_modal, side))) {
+      selection = NULL_SOURCE;
+    }
+    plot_controller_update_selection(config_modal->plot_controller, side,
+                                     selection);
     break;
   default:
     return;

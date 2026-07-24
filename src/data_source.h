@@ -35,12 +35,9 @@ typedef struct {
 
 static inline bool sources_equal(const DataSource SOURCE1,
                                  const DataSource SOURCE2) {
-  // This handles NULL_SOURCE
-  if (SOURCE1.name[0] == '\0' || SOURCE2.name[0] == '\0') {
-    return false;
-  }
-  return (strcmp(SOURCE1.name, SOURCE2.name) == 0);
+  return strcmp(SOURCE1.name, SOURCE2.name) == 0;
 }
+
 static inline int resolve_bound(Bound bound, const GpuState *state) {
   switch (bound.kind) {
   case BOUND_CONSTANT:
