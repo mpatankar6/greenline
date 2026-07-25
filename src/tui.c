@@ -3,7 +3,6 @@
 #include "config_modal.h"
 #include "gpu.h"
 #include "plot_controller.h"
-#include "tui_plot.h"
 #include <assert.h>
 #include <curses.h>
 #include <locale.h>
@@ -26,6 +25,7 @@ static void init_colors() {
   init_pair(PAIR_TITLE, COLOR_GREEN, -1);
   init_pair(PAIR_SELECTION, COLOR_BLUE, -1);
   init_pair(PAIR_HEADING, COLOR_YELLOW, -1);
+  init_pair(PAIR_PLOT_LINE, COLOR_CYAN, -1);
 }
 
 enum SelectedTab { GENERAL = 1, OC, THERMALS, INFO };
@@ -144,7 +144,7 @@ static void draw_frame() {
   draw_tab_line();
   draw_title();
   draw_poll_controls();
-  if (selected_tab != INFO) { // Tab 4 is the info tab
+  if (selected_tab != INFO) {
     draw_configuration_modal_toggle();
   }
 }
@@ -223,14 +223,13 @@ static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
 }
 
 static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
-                         Plot *plot) {
+                         PlotController *plot_controller) {
   switch (selected_tab) {
   case 1:
     draw_general_tab(tab_page, gpu_state);
     auto plot_region =
         derwin(tab_page, getmaxy(tab_page) - 14, getmaxx(tab_page), 14, 0);
-    // plot_load_config(PLOT_CONFIG_GENERAL)
-    plot_draw(plot, plot_region);
+    plot_controller_draw(plot_controller, gpu_state, plot_region);
     delwin(plot_region);
     break;
   case 2:
@@ -268,13 +267,13 @@ static unsigned long get_time_ms() {
          ((unsigned long)time.tv_nsec / 1'000'000ULL);
 }
 
-static void draw(const GpuState *gpu_state, Plot *plot,
+static void draw(const GpuState *gpu_state, PlotController *plot_controller,
                  ConfigModal *config_modal) {
   erase();
 
   draw_frame();
   auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
-  draw_content(tab_page, gpu_state, plot);
+  draw_content(tab_page, gpu_state, plot_controller);
 
   wnoutrefresh(stdscr);
 
@@ -282,8 +281,8 @@ static void draw(const GpuState *gpu_state, Plot *plot,
     int parent_x = getmaxx(tab_page);
     int parent_y = getmaxy(tab_page);
 
-    int height = parent_y / 2;
-    int width = (parent_x * 2) / 3;
+    int height = (parent_y * 2) / 3;
+    int width = parent_x / 2;
     auto modal_window = derwin(tab_page, height, width, (parent_y - height) / 2,
                                (parent_x - width) / 2);
     assert(modal_window);
@@ -305,12 +304,10 @@ void tui_run(Gpu *gpu) {
       .tv_sec = 0, .tv_nsec = 15 * 1'000'000L};
   unsigned long current_time_ms = get_time_ms();
   unsigned long last_update_time_ms = current_time_ms;
-  auto plot = plot_create();
   auto plot_controller = plot_controller_create();
   auto config_modal = plot_controller_get_config_modal(plot_controller);
 
   gpu_update_state(gpu);
-  plot_update(plot, gpu_get_state(gpu));
 
   for (;;) {
     if (!enforce_minimum_size()) {
@@ -330,7 +327,6 @@ void tui_run(Gpu *gpu) {
           modal_active = false;
           continue;
         }
-        plot_destroy(plot);
         plot_controller_destroy(plot_controller);
         return;
       }
@@ -340,10 +336,10 @@ void tui_run(Gpu *gpu) {
     auto gpu_state = gpu_get_state(gpu);
     if (elapsed_time >= poll_ms) {
       gpu_update_state(gpu);
-      plot_update(plot, gpu_state);
+      plot_controller_feed_data(plot_controller, gpu_state);
       last_update_time_ms = current_time_ms;
     }
-    draw(gpu_state, plot, config_modal);
+    draw(gpu_state, plot_controller, config_modal);
     nanosleep(&SLEEP_DURATION, nullptr);
   }
 }

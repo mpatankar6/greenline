@@ -10,6 +10,7 @@ typedef struct {
   SelectionFn get_right;
 } CurrentSelectionGetters;
 typedef struct ConfigModal ConfigModal;
+typedef enum { MODAL_LEFT, MODAL_RIGHT } ModalSide;
 
 [[nodiscard]]
 ConfigModal *config_modal_create(PlotController *plot_controller,

@@ -1,15 +1,10 @@
 #include "plot_controller.h"
-#include "circular_buffer.h"
 #include "config_modal.h"
 #include "data_source.h"
+#include "gpu.h"
 #include "plot.h"
 #include <assert.h>
 #include <stdlib.h>
-
-typedef struct Plot {
-  CircularBuffer *data;
-  DataSource data_source;
-} Plot;
 
 typedef struct PairedPlot {
   Plot *left_subplot;
@@ -24,12 +19,12 @@ struct PlotController {
 
 static DataSource get_left_selection(const PlotController *controller) {
   auto subplot = controller->plots[controller->current_profile].left_subplot;
-  return subplot == nullptr ? NULL_SOURCE : subplot->data_source;
+  return subplot == nullptr ? NULL_SOURCE : plot_data_source(subplot);
 }
 
 static DataSource get_right_selection(const PlotController *controller) {
   auto subplot = controller->plots[controller->current_profile].right_subplot;
-  return subplot == nullptr ? NULL_SOURCE : subplot->data_source;
+  return subplot == nullptr ? NULL_SOURCE : plot_data_source(subplot);
 }
 
 static Plot **get_subplot_slot(PlotController *controller, ModalSide side) {
@@ -46,10 +41,8 @@ PlotController *plot_controller_create() {
   PlotController *plot_controller = calloc(1, sizeof(PlotController));
 
   // Initialize default plots
-  Plot *general_left = calloc(1, sizeof(Plot));
-  general_left->data_source = SOURCES[0];
-  general_left->data = circular_buffer_create();
-  plot_controller->plots[PLOT_PROFILE_GENERAL].left_subplot = general_left;
+  plot_controller->plots[PLOT_PROFILE_GENERAL].left_subplot =
+      plot_create(SOURCES[0]);
 
   CurrentSelectionGetters getters = {.get_left = get_left_selection,
                                      .get_right = get_right_selection};
@@ -62,6 +55,42 @@ ConfigModal *plot_controller_get_config_modal(PlotController *plot_controller) {
   return plot_controller->config_modal;
 }
 
+void plot_controller_switch_profile(PlotController *plot_controller,
+                                    PlotProfile new_profile) {
+  plot_controller->current_profile = new_profile;
+}
+
+void plot_controller_feed_data(const PlotController *plot_controller,
+                               const GpuState *gpu_state) {
+  auto plot_pair = plot_controller->plots[plot_controller->current_profile];
+  if (plot_pair.left_subplot != nullptr) {
+    plot_feed_data(plot_pair.left_subplot, gpu_state);
+  }
+  if (plot_pair.right_subplot != nullptr) {
+    plot_feed_data(plot_pair.right_subplot, gpu_state);
+  }
+}
+
+void plot_controller_draw(const PlotController *plot_controller,
+                          const GpuState *gpu_state, WINDOW *window) {
+  auto plot_pair = plot_controller->plots[plot_controller->current_profile];
+  assert(plot_pair.left_subplot != nullptr); // We at least need a left plot
+
+  int cols = getmaxx(window);
+  int rows = getmaxy(window);
+  if (plot_pair.right_subplot != nullptr) {
+    auto left_pane = derwin(window, rows, cols / 2, 0, 0);
+    auto right_pane = derwin(window, rows, cols / 2, 0, cols / 2);
+    plot_draw(plot_pair.left_subplot, gpu_state, left_pane);
+    plot_draw(plot_pair.right_subplot, gpu_state, right_pane);
+    delwin(left_pane);
+    delwin(right_pane);
+  } else {
+    plot_draw(plot_pair.left_subplot, gpu_state, window);
+    delwin(window);
+  }
+}
+
 void plot_controller_update_selection(PlotController *plot_controller,
                                       ModalSide side, DataSource new_source) {
   auto subplot_slot = get_subplot_slot(plot_controller, side);
@@ -69,26 +98,26 @@ void plot_controller_update_selection(PlotController *plot_controller,
 
   if (subplot == nullptr) {
     assert(!sources_equal(new_source, NULL_SOURCE));
-    *subplot_slot = calloc(1, sizeof(Plot)); // TODO replace with plot_create
-    subplot = *subplot_slot; // Re-read the freshly allocated subplot
-    subplot->data_source = new_source;
-    subplot->data = circular_buffer_create();
+    *subplot_slot = plot_create(new_source);
     return;
   }
 
-  if (!sources_equal(new_source, subplot->data_source)) {
-    circular_buffer_destroy(subplot->data);
+  if (!sources_equal(new_source, plot_data_source(subplot))) {
+    plot_destroy(subplot);
     if (sources_equal(new_source, NULL_SOURCE)) {
-      free(subplot); // TODO replace with plot_destroy
       *subplot_slot = nullptr;
     } else {
-      subplot->data_source = new_source;
-      subplot->data = circular_buffer_create();
+      *subplot_slot = plot_create(new_source);
     }
   }
 }
 
 void plot_controller_destroy(PlotController *plot_controller) {
   config_modal_destroy(plot_controller->config_modal);
+  for (int i =0; i < PLOT_PROFILE_COUNT ; ++i ) {
+    auto plot_pair = plot_controller->plots[i];
+    plot_destroy(plot_pair.left_subplot);
+    plot_destroy(plot_pair.right_subplot);
+  }
   free(plot_controller);
 }

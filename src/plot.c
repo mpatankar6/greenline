@@ -1,42 +1,17 @@
-#include "tui_plot.h"
+#include "plot.h"
 #include "circular_buffer.h"
+#include "colors.h"
+#include "data_source.h"
 #include "gpu.h"
 #include <assert.h>
-#include <curses.h>
 #include <math.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define OFFSET_AND_TYPE(field)                                                 \
-  offsetof(GpuState, field), _Generic((typeof((GpuState){0}.field)){0},        \
-      unsigned int: DS_UINT,                                                   \
-      double: DS_DOUBLE)
-
-typedef enum { DS_UINT, DS_DOUBLE } DSType;
-
-typedef struct DataSource {
-  char name[32];
-  char unit[4];
-  int lower;
-  int upper;
-  size_t offset;
-  DSType type;
-} DataSource;
-
-static constexpr DataSource SOURCES[] = {
-    {"GPU Clock", "Mhz", 0, 100, OFFSET_AND_TYPE(gpu_util_percent)},
-    {"GPU Temp", "°C", 0, 95, OFFSET_AND_TYPE(temperature_celsius)}};
-static constexpr size_t SOURCE_COUNT = sizeof(SOURCES) / sizeof(DataSource);
-
-static constexpr int NUM_TICK_LABELS = 5;
-
-struct Plot {
+typedef struct Plot {
   CircularBuffer *data;
-  GpuState *gpu_state;
-  Plot *paired;
   DataSource data_source;
-};
+} Plot;
 
 static void draw_data_point(int x_coord, int y_coord, int last_y_coord,
                             WINDOW *window) {
@@ -48,7 +23,6 @@ static void draw_data_point(int x_coord, int y_coord, int last_y_coord,
   int height_difference = y_coord - last_y_coord;
   int height_distance = abs(height_difference);
   if (height_difference > 0) { // Draw down
-    // mvwvline(window, FLIP(y_coord), x_coord, height_distance, ACS_VLINE);
     mvwvline(window, FLIP(y_coord), x_coord, ACS_VLINE, height_distance);
     mvwaddch(window, FLIP(y_coord), x_coord, ACS_URCORNER);
     mvwaddch(window, FLIP(last_y_coord), x_coord, ACS_LLCORNER);
@@ -62,8 +36,9 @@ static void draw_data_point(int x_coord, int y_coord, int last_y_coord,
 #undef FLIP
 }
 
-static void draw_data_line(Plot *plot, WINDOW *window) {
-  wattr_set(window, A_BOLD, 1, nullptr);
+static void draw_data_line(const Plot *plot, WINDOW *window,
+                           int data_point_range) {
+  wattr_set(window, A_BOLD, PAIR_PLOT_LINE, nullptr);
   int rows = getmaxy(window);
   int cols = getmaxx(window) - 2; // Account for side borders
   size_t buffer_size = circular_buffer_size(plot->data);
@@ -73,8 +48,6 @@ static void draw_data_line(Plot *plot, WINDOW *window) {
   // Clamp right edge to the last column
   int x_pos = (int)points_to_draw < cols ? (int)points_to_draw : cols;
   int last_height = -1; // Sentinel value used to indicate first height
-  int data_point_range = plot->data_source.upper - plot->data_source.lower;
-  assert(data_point_range > 0);
   for (size_t i = 0; i < points_to_draw; ++i, --x_pos) {
     int data_point = circular_buffer_peek(plot->data, i);
     // Y-pos assumes bottom-left origin, can be flipped later.
@@ -87,18 +60,38 @@ static void draw_data_line(Plot *plot, WINDOW *window) {
   wattr_set(window, A_NORMAL, 0, nullptr);
 }
 
-static void plot_draw_pane(Plot *plot, WINDOW *window) {
+Plot *plot_create(DataSource data_source) {
+  Plot *plot = calloc(1, sizeof(Plot));
+  plot->data = circular_buffer_create();
+  plot->data_source = data_source;
+  return plot;
+}
+
+DataSource plot_data_source(const Plot *plot) { return plot->data_source; }
+
+void plot_feed_data(Plot *plot, const GpuState *gpu_state) {
+  auto value = data_source_value(plot->data_source, gpu_state);
+  circular_buffer_put(plot->data, value);
+}
+
+void plot_draw(const Plot *plot, const GpuState *gpu_state, WINDOW *window) {
+  static constexpr int NUM_TICK_LABELS = 5;
+
   int cols = getmaxx(window);
   int rows = getmaxy(window);
   auto data_source = plot->data_source;
 
+  auto lower_bound = data_source_lower(data_source, gpu_state);
+  auto upper_bound = data_source_upper(data_source, gpu_state);
+  auto data_point_range = upper_bound - lower_bound;
+  assert(data_point_range > 0);
+
   // Write tick labels bottom to top
   int longest_tick_label_len = 0;
   int row_step = (rows - 2) / (NUM_TICK_LABELS - 1);
-  int data_step =
-      (data_source.upper - data_source.lower) / (NUM_TICK_LABELS - 1);
+  int data_step = data_point_range / (NUM_TICK_LABELS - 1);
   int row = rows - 1;
-  int value = data_source.lower;
+  int value = lower_bound;
   for (size_t i = 0; i < NUM_TICK_LABELS; ++i) {
     char buffer[16];
     auto tick_label_len = snprintf(buffer, sizeof(buffer), "%d", value);
@@ -122,56 +115,13 @@ static void plot_draw_pane(Plot *plot, WINDOW *window) {
   auto data_pane =
       derwin(window, plot_rows, plot_cols, rows - plot_rows, x_offset);
   box(data_pane, 0, 0);
-  draw_data_line(plot, data_pane);
+  draw_data_line(plot, data_pane, data_point_range);
   delwin(data_pane);
 }
 
-Plot *plot_create() {
-  Plot *plot = calloc(1, sizeof(Plot));
-  plot->data = circular_buffer_create();
-  plot->data_source = SOURCES[0];
-  return plot;
-}
-
-void plot_update(Plot *plot, const GpuState *state) {
-  auto value_address = (char *)state + plot->data_source.offset;
-  switch (plot->data_source.type) {
-  case DS_UINT:
-    circular_buffer_put(plot->data, (int)*(unsigned int *)value_address);
-    break;
-  case DS_DOUBLE:
-    circular_buffer_put(plot->data, (int)*(double *)value_address);
-    break;
-  }
-}
-
-void plot_configure(Plot* plot, WINDOW* window) {
-  werase(window);
-  box(window, 0, 0);
-}
-
-void plot_configure_model_handle_input(Plot *plot, int key) {
-}
-
-void plot_draw(Plot *plot, WINDOW *window) {
-  int cols = getmaxx(window);
-  int rows = getmaxy(window);
-  if (plot->paired != nullptr) {
-    auto left_pane = derwin(window, rows, cols / 2, 0, 0);
-    auto right_pane = derwin(window, rows, cols / 2, 0, cols / 2);
-    plot_draw_pane(plot, left_pane);
-    plot_draw_pane(plot->paired, right_pane);
-    delwin(left_pane);
-    delwin(right_pane);
-  } else {
-    plot_draw_pane(plot, window);
-  }
-}
-
 void plot_destroy(Plot *plot) {
-  if (plot->paired != nullptr) {
-    circular_buffer_destroy(plot->paired->data);
-    free(plot->paired);
+  if (plot == nullptr) {
+    return;
   }
   circular_buffer_destroy(plot->data);
   free(plot);
