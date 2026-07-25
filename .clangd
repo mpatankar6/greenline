@@ -3,6 +3,8 @@ CompileFlags:
 Diagnostics:
   UnusedIncludes: Strict
   MissingIncludes: Strict
+  Includes:
+    IgnoreHeader: ['bits/.*']
   ClangTidy:
     Add: ['bugprone-*', 'cert-*', 'readability-*', 'misc-*', 'portability-*']
     Remove: ['readability-magic-numbers'] # Too many false positives
