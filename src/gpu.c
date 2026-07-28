@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct Gpu {
   nvmlDevice_t handle;
@@ -44,8 +45,6 @@ static const char *arch_to_string(nvmlDeviceArchitecture_t arch) {
     return "Hopper";
   case NVML_DEVICE_ARCH_BLACKWELL:
     return "Blackwell";
-  case NVML_DEVICE_ARCH_T23X:
-    return "Orin";
   case NVML_DEVICE_ARCH_UNKNOWN:
   default:
     return "Unknown";
@@ -55,6 +54,36 @@ static const char *arch_to_string(nvmlDeviceArchitecture_t arch) {
 static unsigned int bytes_to_mib(unsigned long long bytes) {
   const int BYTES_PER_MIB = 1024 * 1024;
   return (unsigned int)(bytes / BYTES_PER_MIB);
+}
+
+static void describe_throttle_reasons(unsigned long long reasons,
+                                      GpuState *state) {
+  static constexpr struct {
+    const unsigned long long VALUE;
+    const char NAME[MAX_THROTTLE_REASON_LEN];
+  } REASONS[] = {
+      {nvmlClocksEventReasonGpuIdle, "Idle"},
+      {nvmlClocksEventReasonApplicationsClocksSetting, "App Clocks"},
+      {nvmlClocksEventReasonSwPowerCap, "Power Cap"},
+      {nvmlClocksThrottleReasonHwSlowdown, "HW Slowdown"},
+      {nvmlClocksEventReasonSyncBoost, "Sync Boost"},
+      {nvmlClocksEventReasonSwThermalSlowdown, "SW Thermal"},
+      {nvmlClocksThrottleReasonHwThermalSlowdown, "HW Thermal"},
+      {nvmlClocksThrottleReasonHwPowerBrakeSlowdown, "Power Brake"},
+      {nvmlClocksEventReasonDisplayClockSetting, "Display Clock"},
+  };
+  static constexpr size_t THROTTLE_REASONS =
+      sizeof(REASONS) / sizeof(REASONS[0]);
+  static_assert(THROTTLE_REASONS <= MAX_THROTTLE_REASONS);
+
+  state->throttle_reason_count = 0;
+  for (size_t i = 0; i < THROTTLE_REASONS; ++i) {
+    bool reason_detected = (reasons & REASONS[i].VALUE) != 0;
+    if (reason_detected) {
+      auto buffer = state->throttle_reasons[state->throttle_reason_count++];
+      strcpy(buffer, REASONS[i].NAME);
+    }
+  }
 }
 
 static void gpu_update_static_state(Gpu *gpu) {
@@ -132,6 +161,11 @@ static void gpu_update_static_state(Gpu *gpu) {
   last_status = nvmlDeviceGetMaxClockInfo(device, NVML_CLOCK_MEM,
                                           &state->max_memory_clock_mhz);
   check_error(last_status, "Error retrieving max memory clock");
+
+  last_status = nvmlDeviceGetPowerManagementLimitConstraints(
+      device, &state->power_limit_min_milliwatts,
+      &state->power_limit_max_milliwatts);
+  check_error(last_status, "Error retrieving power limit constraints");
 }
 
 static void gpu_update_dynamic_state(Gpu *gpu) {
@@ -190,6 +224,35 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
   check_error(last_status, "Error retrieving device pstate");
   (void)snprintf(state->performance_state, sizeof(state->performance_state),
                  pstate == NVML_PSTATE_UNKNOWN ? "?" : "P%u", pstate);
+
+  last_status = nvmlDeviceGetPowerUsage(device, &state->power_draw_milliwatts);
+  check_error(last_status, "Error retrieving device power usage");
+  last_status =
+      nvmlDeviceGetPowerManagementLimit(device, &state->power_limit_milliwatts);
+  check_error(last_status, "Error retrieving device power limit");
+
+  nvmlClockOffset_t gpc_clock_offset = {
+      .version = nvmlClockOffset_v1, .type = NVML_CLOCK_GRAPHICS,
+      .pstate = pstate};
+  last_status = nvmlDeviceGetClockOffsets(device, &gpc_clock_offset);
+  check_error(last_status, "Error retrieving gpc clock offset");
+  state->gpc_clock_offset_mhz = gpc_clock_offset.clockOffsetMHz;
+  state->gpc_clock_offset_min_mhz = gpc_clock_offset.minClockOffsetMHz;
+  state->gpc_clock_offset_max_mhz = gpc_clock_offset.maxClockOffsetMHz;
+
+  nvmlClockOffset_t mem_clock_offset = {
+      .version = nvmlClockOffset_v1, .type = NVML_CLOCK_MEM, .pstate = pstate};
+  last_status = nvmlDeviceGetClockOffsets(device, &mem_clock_offset);
+  check_error(last_status, "Error retrieving mem clock offset");
+  state->mem_clock_offset_mhz = mem_clock_offset.clockOffsetMHz;
+  state->mem_clock_offset_min_mhz = mem_clock_offset.minClockOffsetMHz;
+  state->mem_clock_offset_max_mhz = mem_clock_offset.maxClockOffsetMHz;
+
+  unsigned long long clocks_event_reasons = 0;
+  last_status =
+      nvmlDeviceGetCurrentClocksEventReasons(device, &clocks_event_reasons);
+  check_error(last_status, "Error retrieving clocks event reasons");
+  describe_throttle_reasons(clocks_event_reasons, state);
 }
 
 Gpu *gpu_init() {

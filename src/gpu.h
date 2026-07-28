@@ -1,5 +1,8 @@
 #pragma once
 
+static constexpr unsigned int MAX_THROTTLE_REASONS = 9;
+static constexpr unsigned int MAX_THROTTLE_REASON_LEN = 16;
+
 typedef struct {
   bool initialized;
   char driver_version[128];
@@ -30,6 +33,18 @@ typedef struct {
   unsigned int pcie_max_link_width;
   unsigned int pcie_max_link_speed_mbps;
   unsigned int tdp_milliwatts;
+  unsigned int power_limit_min_milliwatts;
+  unsigned int power_limit_max_milliwatts;
+  unsigned int power_draw_milliwatts;
+  unsigned int power_limit_milliwatts;
+  int gpc_clock_offset_mhz;
+  int gpc_clock_offset_min_mhz;
+  int gpc_clock_offset_max_mhz;
+  int mem_clock_offset_mhz;
+  int mem_clock_offset_min_mhz;
+  int mem_clock_offset_max_mhz;
+  char throttle_reasons[MAX_THROTTLE_REASONS][MAX_THROTTLE_REASON_LEN];
+  unsigned int throttle_reason_count;
 } GpuState;
 
 typedef struct Gpu Gpu;

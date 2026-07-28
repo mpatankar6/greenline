@@ -26,10 +26,12 @@ static void init_colors() {
   init_pair(PAIR_SELECTION, COLOR_BLUE, -1);
   init_pair(PAIR_HEADING, COLOR_YELLOW, -1);
   init_pair(PAIR_PLOT_LINE, COLOR_CYAN, -1);
+  init_pair(PAIR_DANGER, COLOR_RED, -1);
+  init_pair(PAIR_SAFE, COLOR_GREEN, -1);
 }
 
-enum SelectedTab { GENERAL = 1, OC, THERMALS, INFO };
-static enum SelectedTab selected_tab = GENERAL;
+enum SelectedTab { TAB_GENERAL = 1, TAB_OC, TAB_THERMALS, TAB_INFO };
+static enum SelectedTab selected_tab = TAB_GENERAL;
 
 typedef bool ShouldContinue;
 
@@ -71,7 +73,7 @@ static ShouldContinue handle_input(int input) {
     poll_ms = poll_ms > 100 ? poll_ms - 100 : poll_ms;
     break;
   case 'c':
-    if (selected_tab != INFO) {
+    if (selected_tab != TAB_INFO) {
       modal_active = (bool)!modal_active;
     }
     break;
@@ -144,7 +146,7 @@ static void draw_frame() {
   draw_tab_line();
   draw_title();
   draw_poll_controls();
-  if (selected_tab != INFO) {
+  if (selected_tab != TAB_INFO) {
     draw_configuration_modal_toggle();
   }
 }
@@ -182,16 +184,61 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
             state->fan_speed_percentage, state->fan_speed_rpm);
   mvwprintw(tab_page, y_pos++, x_pos, "Temperature: %u°C",
             state->temperature_celsius);
+
   // Switch columns
   y_pos = 1;
   x_pos += cols / 2;
+
   mvwprintw(tab_page, y_pos++, x_pos, "P-State: %s", state->performance_state);
   mvwprintw(tab_page, y_pos++, x_pos, "Encoder: %u%%   Decoder: %u%%",
             state->encoder_util_percent, state->decoder_util_percent);
 }
 
-static void draw_oc_tab(WINDOW *tab_page) {}
+static void draw_oc_tab(WINDOW *tab_page, const GpuState *state) {
+  int y_pos = 1;
+  int x_pos = 1;
+  int cols = getmaxx(tab_page);
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Power");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Draw: %u.%03u W",
+            state->power_draw_milliwatts / 1000,
+            state->power_draw_milliwatts % 1000);
+  mvwprintw(tab_page, y_pos++, x_pos, "Limit: %u W (allowable range: %u-%u W)",
+            state->power_limit_milliwatts / 1000,
+            state->power_limit_min_milliwatts / 1000,
+            state->power_limit_max_milliwatts / 1000);
+  y_pos++;
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Clock Offsets");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Core: %+d MHz (range %+d to %+d MHz)",
+            state->gpc_clock_offset_mhz, state->gpc_clock_offset_min_mhz,
+            state->gpc_clock_offset_max_mhz);
+  mvwprintw(tab_page, y_pos++, x_pos, "Memory: %+d MHz (range %+d to %+d MHz)",
+            state->mem_clock_offset_mhz, state->mem_clock_offset_min_mhz,
+            state->mem_clock_offset_max_mhz);
+
+  // Switch columns
+  y_pos = 1;
+  x_pos += cols / 2;
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Throttle Reasons");
+  if (state->throttle_reason_count == 0) {
+    wattr_set(tab_page, A_NORMAL, PAIR_SAFE, nullptr);
+    mvwprintw(tab_page, y_pos++, x_pos, "None");
+  }
+  wattr_set(tab_page, A_NORMAL, PAIR_DANGER, nullptr);
+  for (unsigned int i = 0; i < state->throttle_reason_count; ++i) {
+    mvwprintw(tab_page, y_pos++, x_pos, "%s", state->throttle_reasons[i]);
+  }
+}
+
 static void draw_thermals_tab(WINDOW *tab_page) {}
+
 static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
   int y_pos = 1;
   int x_pos = 1;
@@ -225,20 +272,23 @@ static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
 static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
                          PlotController *plot_controller) {
   switch (selected_tab) {
-  case 1:
+  case TAB_GENERAL:
     draw_general_tab(tab_page, gpu_state);
     auto plot_region =
         derwin(tab_page, getmaxy(tab_page) - 14, getmaxx(tab_page), 14, 0);
+    plot_controller_switch_profile(plot_controller, PLOT_PROFILE_GENERAL);
     plot_controller_draw(plot_controller, gpu_state, plot_region);
     delwin(plot_region);
     break;
-  case 2:
-    draw_oc_tab(tab_page);
+  case TAB_OC:
+    plot_controller_switch_profile(plot_controller, PLOT_PROFILE_OC);
+    draw_oc_tab(tab_page, gpu_state);
     break;
-  case 3:
+  case TAB_THERMALS:
+    plot_controller_switch_profile(plot_controller, PLOT_PROFILE_THERMALS);
     draw_thermals_tab(tab_page);
     break;
-  case 4:
+  case TAB_INFO:
     draw_info_tab(tab_page, gpu_state);
     break;
   default:
