@@ -2,6 +2,7 @@
 #include "colors.h"
 #include "config_modal.h"
 #include "gpu.h"
+#include "oc_controller.h"
 #include "plot_controller.h"
 #include <assert.h>
 #include <curses.h>
@@ -194,47 +195,60 @@ static void draw_general_tab(WINDOW *tab_page, const GpuState *state) {
             state->encoder_util_percent, state->decoder_util_percent);
 }
 
-static void draw_oc_tab(WINDOW *tab_page, const GpuState *state) {
+static void draw_oc_tab(WINDOW *tab_page, const GpuState *state,
+                        const OCController *oc_controller) {
   int y_pos = 1;
   int x_pos = 1;
   int cols = getmaxx(tab_page);
 
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "Power");
+  mvwprintw(tab_page, y_pos++, x_pos, "Controls");
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "Draw: %u.%03u W",
-            state->power_draw_milliwatts / 1000,
-            state->power_draw_milliwatts % 1000);
-  mvwprintw(tab_page, y_pos++, x_pos, "Limit: %u W (allowable range: %u-%u W)",
-            state->power_limit_milliwatts / 1000,
-            state->power_limit_min_milliwatts / 1000,
-            state->power_limit_max_milliwatts / 1000);
-  y_pos++;
 
-  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "Clock Offsets");
-  wattr_set(tab_page, A_NORMAL, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "Core: %+d MHz (range %+d to %+d MHz)",
-            state->gpc_clock_offset_mhz, state->gpc_clock_offset_min_mhz,
-            state->gpc_clock_offset_max_mhz);
-  mvwprintw(tab_page, y_pos++, x_pos, "Memory: %+d MHz (range %+d to %+d MHz)",
-            state->mem_clock_offset_mhz, state->mem_clock_offset_min_mhz,
-            state->mem_clock_offset_max_mhz);
-
-  // Switch columns
-  y_pos = 1;
-  x_pos += cols / 2;
-
-  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "Throttle Reasons");
-  if (state->throttle_reason_count == 0) {
-    wattr_set(tab_page, A_NORMAL, PAIR_SAFE, nullptr);
-    mvwprintw(tab_page, y_pos++, x_pos, "None");
+  static constexpr int SLIDER_HEIGHT = 3;
+  for (int i = 0; i < SLIDER_COUNT; ++i) {
+    auto slider_window =
+        derwin(tab_page, SLIDER_HEIGHT, cols - x_pos, y_pos, x_pos);
+    assert(slider_window != nullptr);
+    oc_controller_draw_slider(oc_controller, (Slider)i, slider_window);
+    delwin(slider_window);
+    y_pos += SLIDER_HEIGHT;
   }
-  wattr_set(tab_page, A_NORMAL, PAIR_DANGER, nullptr);
-  for (unsigned int i = 0; i < state->throttle_reason_count; ++i) {
-    mvwprintw(tab_page, y_pos++, x_pos, "%s", state->throttle_reasons[i]);
-  }
+
+  // mvwprintw(tab_page, y_pos++, x_pos, "Draw: %u.%u W",
+  //           (state->power_draw_milliwatts / 100) / 10,
+  //           (state->power_draw_milliwatts / 100) % 10);
+  // mvwprintw(tab_page, y_pos++, x_pos, "Limit: %u W (allowable range: %u-%u
+  // W)",
+  //           state->power_limit_milliwatts / 1000,
+  //           state->power_limit_min_milliwatts / 1000,
+  //           state->power_limit_max_milliwatts / 1000);
+  // y_pos++;
+  //
+  // wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  // mvwprintw(tab_page, y_pos++, x_pos, "Clock Offsets");
+  // wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  // mvwprintw(tab_page, y_pos++, x_pos, "Core: %+d MHz (range %+d to %+d MHz)",
+  //           state->gpc_clock_offset_mhz, state->gpc_clock_offset_min_mhz,
+  //           state->gpc_clock_offset_max_mhz);
+  // mvwprintw(tab_page, y_pos++, x_pos, "Memory: %+d MHz (range %+d to %+d
+  // MHz)",
+  //           state->mem_clock_offset_mhz, state->mem_clock_offset_min_mhz,
+  //           state->mem_clock_offset_max_mhz);
+
+  // y_pos = 1;
+  // x_pos += cols / 2;
+  //
+  // wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  // mvwprintw(tab_page, y_pos++, x_pos, "Throttle Reasons");
+  // if (state->throttle_reason_count == 0) {
+  //   wattr_set(tab_page, A_NORMAL, PAIR_SAFE, nullptr);
+  //   mvwprintw(tab_page, y_pos++, x_pos, "None");
+  // }
+  // wattr_set(tab_page, A_NORMAL, PAIR_DANGER, nullptr);
+  // for (unsigned int i = 0; i < state->throttle_reason_count; ++i) {
+  //   mvwprintw(tab_page, y_pos++, x_pos, "%s", state->throttle_reasons[i]);
+  // }
 }
 
 static void draw_thermals_tab(WINDOW *tab_page) {}
@@ -270,6 +284,7 @@ static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
 }
 
 static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
+                         const OCController *oc_controller,
                          PlotController *plot_controller) {
   switch (selected_tab) {
   case TAB_GENERAL:
@@ -282,7 +297,7 @@ static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
     break;
   case TAB_OC:
     plot_controller_switch_profile(plot_controller, PLOT_PROFILE_OC);
-    draw_oc_tab(tab_page, gpu_state);
+    draw_oc_tab(tab_page, gpu_state, oc_controller);
     break;
   case TAB_THERMALS:
     plot_controller_switch_profile(plot_controller, PLOT_PROFILE_THERMALS);
@@ -317,13 +332,13 @@ static unsigned long get_time_ms() {
          ((unsigned long)time.tv_nsec / 1'000'000ULL);
 }
 
-static void draw(const GpuState *gpu_state, PlotController *plot_controller,
-                 ConfigModal *config_modal) {
+static void draw(const GpuState *gpu_state, const OCController *oc_controller,
+                 PlotController *plot_controller, ConfigModal *config_modal) {
   erase();
 
   draw_frame();
   auto tab_page = derwin(stdscr, LINES - 2, COLS - 2, 1, 1);
-  draw_content(tab_page, gpu_state, plot_controller);
+  draw_content(tab_page, gpu_state, oc_controller, plot_controller);
 
   wnoutrefresh(stdscr);
 
@@ -355,6 +370,7 @@ void tui_run(Gpu *gpu) {
   unsigned long current_time_ms = get_time_ms();
   unsigned long last_update_time_ms = current_time_ms;
   auto plot_controller = plot_controller_create();
+  auto oc_controller = oc_controller_create(gpu_get_state(gpu));
   auto config_modal = plot_controller_get_config_modal(plot_controller);
 
   gpu_update_state(gpu);
@@ -378,6 +394,7 @@ void tui_run(Gpu *gpu) {
           continue;
         }
         plot_controller_destroy(plot_controller);
+        oc_controller_destroy(oc_controller);
         return;
       }
     }
@@ -389,7 +406,7 @@ void tui_run(Gpu *gpu) {
       plot_controller_feed_data(plot_controller, gpu_state);
       last_update_time_ms = current_time_ms;
     }
-    draw(gpu_state, plot_controller, config_modal);
+    draw(gpu_state, oc_controller, plot_controller, config_modal);
     nanosleep(&SLEEP_DURATION, nullptr);
   }
 }

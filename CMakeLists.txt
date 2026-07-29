@@ -23,6 +23,7 @@ add_executable(greenline
   src/plot_controller.c
   src/plot.c
   src/config_modal.c
+  src/oc_controller.c
 )
 
 include(CheckIPOSupported)
