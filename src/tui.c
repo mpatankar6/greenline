@@ -221,10 +221,10 @@ static void draw_oc_tab(WINDOW *tab_page, const GpuState *state,
   x_pos += (cols / 2) + 1;
 
   mvwprintw(tab_page, y_pos++, x_pos, "[j/k] navigate [h/l] adjust");
-  mvwprintw(tab_page, y_pos++, x_pos, "[a]pply        [d]iscard        [r]eset");
+  mvwprintw(tab_page, y_pos++, x_pos, "[a]pply        [d]iscard    [r]eset");
   y_pos++;
 
-  mvwprintw(tab_page, y_pos++, x_pos, "Power Draw: %u.%u W   Temperature: %u°C",
+  mvwprintw(tab_page, y_pos++, x_pos, "Power Draw: %u.%u W   Temp: %u°C",
             (state->power_draw_milliwatts / 100) / 10,
             (state->power_draw_milliwatts / 100) % 10,
             state->temperature_celsius);
@@ -396,6 +396,9 @@ void tui_run(Gpu *gpu) {
       auto should_continue = handle_input(current_key);
       if (modal_active) {
         config_modal_handle_input(config_modal, current_key);
+      } else if (selected_tab == TAB_OC) {
+        oc_controller_handle_input(oc_controller, gpu_get_state(gpu),
+                                   current_key);
       }
       if (!should_continue) {
         if (modal_active) {
