@@ -14,12 +14,12 @@ typedef struct {
   int min;
   int max;
   int current;
+  bool dirty;
 } SliderState;
 
 struct OCController {
   SliderState sliders[SLIDER_COUNT];
   Slider selected_slider;
-  bool dirty;
 };
 
 static void init_slider(OCController *controller, const GpuState *gpu_state,
@@ -66,22 +66,26 @@ void oc_controller_draw_slider(const OCController *controller, Slider slider,
   const SliderState *state = &controller->sliders[slider];
   int cols = getmaxx(window);
 
-  if (slider == controller->selected_slider) {
-    wattr_set(window, A_BOLD, PAIR_SELECTION, nullptr);
-  }
   mvwprintw(window, 0, 0, "%s", state->label);
-  wattr_set(window, A_NORMAL, 0, nullptr);
+
+  bool selected = slider == controller->selected_slider;
+  int current_len = snprintf(nullptr, 0, "%d", state->current);
+  mvwprintw(window, 0, cols - current_len, "%d", state->current);
 
   int range = state->max - state->min;
   assert(range > 0);
 
-  assert (state->current >= state->min && state->current <= state->max);
+  assert(state->current >= state->min && state->current <= state->max);
   int fill_width = (cols * (state->current - state->min)) / range;
 
+  if (selected) {
+    wattr_set(window, A_NORMAL, PAIR_SELECTION, nullptr);
+  }
   wmove(window, 1, 0);
   for (int i = 0; i < cols; ++i) {
     waddstr(window, i < fill_width ? "█" : "░");
   }
+  wattr_set(window, A_NORMAL, 0, nullptr);
 
   mvwprintw(window, 2, 0, "%d", state->min);
   int max_len = snprintf(nullptr, 0, "%d", state->max);

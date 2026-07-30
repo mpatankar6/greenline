@@ -208,47 +208,51 @@ static void draw_oc_tab(WINDOW *tab_page, const GpuState *state,
   static constexpr int SLIDER_HEIGHT = 3;
   for (int i = 0; i < SLIDER_COUNT; ++i) {
     auto slider_window =
-        derwin(tab_page, SLIDER_HEIGHT, cols - x_pos, y_pos, x_pos);
+        derwin(tab_page, SLIDER_HEIGHT, ((cols - x_pos) / 2) - 1, y_pos, x_pos);
     assert(slider_window != nullptr);
     oc_controller_draw_slider(oc_controller, (Slider)i, slider_window);
     delwin(slider_window);
-    y_pos += SLIDER_HEIGHT;
+    y_pos += SLIDER_HEIGHT + 1;
   }
 
-  // mvwprintw(tab_page, y_pos++, x_pos, "Draw: %u.%u W",
-  //           (state->power_draw_milliwatts / 100) / 10,
-  //           (state->power_draw_milliwatts / 100) % 10);
-  // mvwprintw(tab_page, y_pos++, x_pos, "Limit: %u W (allowable range: %u-%u
-  // W)",
-  //           state->power_limit_milliwatts / 1000,
-  //           state->power_limit_min_milliwatts / 1000,
-  //           state->power_limit_max_milliwatts / 1000);
-  // y_pos++;
-  //
-  // wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
-  // mvwprintw(tab_page, y_pos++, x_pos, "Clock Offsets");
-  // wattr_set(tab_page, A_NORMAL, 0, nullptr);
-  // mvwprintw(tab_page, y_pos++, x_pos, "Core: %+d MHz (range %+d to %+d MHz)",
-  //           state->gpc_clock_offset_mhz, state->gpc_clock_offset_min_mhz,
-  //           state->gpc_clock_offset_max_mhz);
-  // mvwprintw(tab_page, y_pos++, x_pos, "Memory: %+d MHz (range %+d to %+d
-  // MHz)",
-  //           state->mem_clock_offset_mhz, state->mem_clock_offset_min_mhz,
-  //           state->mem_clock_offset_max_mhz);
+  int left_col_last_row = y_pos;
 
-  // y_pos = 1;
-  // x_pos += cols / 2;
-  //
-  // wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
-  // mvwprintw(tab_page, y_pos++, x_pos, "Throttle Reasons");
-  // if (state->throttle_reason_count == 0) {
-  //   wattr_set(tab_page, A_NORMAL, PAIR_SAFE, nullptr);
-  //   mvwprintw(tab_page, y_pos++, x_pos, "None");
-  // }
-  // wattr_set(tab_page, A_NORMAL, PAIR_DANGER, nullptr);
-  // for (unsigned int i = 0; i < state->throttle_reason_count; ++i) {
-  //   mvwprintw(tab_page, y_pos++, x_pos, "%s", state->throttle_reasons[i]);
-  // }
+  y_pos = 1;
+  x_pos += (cols / 2) + 1;
+
+  mvwprintw(tab_page, y_pos++, x_pos, "[j/k] navigate [h/l] adjust");
+  mvwprintw(tab_page, y_pos++, x_pos, "[a]pply        [d]iscard        [r]eset");
+  y_pos++;
+
+  mvwprintw(tab_page, y_pos++, x_pos, "Power Draw: %u.%u W   Temperature: %u°C",
+            (state->power_draw_milliwatts / 100) / 10,
+            (state->power_draw_milliwatts / 100) % 10,
+            state->temperature_celsius);
+  mvwprintw(tab_page, y_pos++, x_pos, "Fan Speed:  %u%% (%u RPM)",
+            state->fan_speed_percentage, state->fan_speed_rpm);
+  y_pos++;
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Throttle Reasons");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  if (state->throttle_reason_count == 0) {
+    wattr_set(tab_page, A_NORMAL, PAIR_SAFE, nullptr);
+    mvwprintw(tab_page, y_pos++, x_pos, "None");
+  }
+  wattr_set(tab_page, A_NORMAL, PAIR_DANGER, nullptr);
+  unsigned int max_displayed_throttle_reasons =
+      (unsigned int)(left_col_last_row - y_pos);
+  unsigned int counter = 0;
+  for (unsigned int i = 0; i < state->throttle_reason_count; ++i) {
+    ++counter;
+    if (counter > max_displayed_throttle_reasons) {
+      mvwprintw(tab_page, y_pos, x_pos, "+ %u more",
+                counter - max_displayed_throttle_reasons);
+      continue;
+    }
+    mvwprintw(tab_page, y_pos++, x_pos, "%s", state->throttle_reasons[i]);
+  }
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
 }
 
 static void draw_thermals_tab(WINDOW *tab_page) {}
@@ -286,18 +290,23 @@ static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
 static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
                          const OCController *oc_controller,
                          PlotController *plot_controller) {
+  static constexpr int PLOT_START_ROW = 14;
   switch (selected_tab) {
   case TAB_GENERAL:
     draw_general_tab(tab_page, gpu_state);
-    auto plot_region =
-        derwin(tab_page, getmaxy(tab_page) - 14, getmaxx(tab_page), 14, 0);
+    auto plot_region = derwin(tab_page, getmaxy(tab_page) - PLOT_START_ROW,
+                              getmaxx(tab_page), PLOT_START_ROW, 0);
     plot_controller_switch_profile(plot_controller, PLOT_PROFILE_GENERAL);
     plot_controller_draw(plot_controller, gpu_state, plot_region);
     delwin(plot_region);
     break;
   case TAB_OC:
-    plot_controller_switch_profile(plot_controller, PLOT_PROFILE_OC);
     draw_oc_tab(tab_page, gpu_state, oc_controller);
+    auto oc_plot_region = derwin(tab_page, getmaxy(tab_page) - PLOT_START_ROW,
+                                 getmaxx(tab_page), PLOT_START_ROW, 0);
+    plot_controller_switch_profile(plot_controller, PLOT_PROFILE_OC);
+    plot_controller_draw(plot_controller, gpu_state, oc_plot_region);
+    delwin(oc_plot_region);
     break;
   case TAB_THERMALS:
     plot_controller_switch_profile(plot_controller, PLOT_PROFILE_THERMALS);

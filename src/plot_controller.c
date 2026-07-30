@@ -43,6 +43,10 @@ PlotController *plot_controller_create() {
   // Initialize default plots
   plot_controller->plots[PLOT_PROFILE_GENERAL].left_subplot =
       plot_create(SOURCES[0]);
+  plot_controller->plots[PLOT_PROFILE_OC].left_subplot =
+      plot_create(SOURCES[0]);
+  plot_controller->plots[PLOT_PROFILE_OC].right_subplot =
+      plot_create(SOURCES[3]);
 
   CurrentSelectionGetters getters = {.get_left = get_left_selection,
                                      .get_right = get_right_selection};
