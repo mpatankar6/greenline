@@ -21,4 +21,8 @@ void oc_controller_draw_slider(const OCController *controller, Slider slider,
 void oc_controller_handle_input(OCController *controller,
                                 const GpuState *gpu_state, int key);
 
+bool oc_controller_at_default_values(const GpuState *gpu_state);
+
+bool oc_controller_is_dirty(const OCController *controller);
+
 void oc_controller_destroy(OCController *controller);

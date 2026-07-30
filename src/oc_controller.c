@@ -45,7 +45,7 @@ static void init_slider(OCController *controller, const GpuState *gpu_state,
     state->max = gpu_state->mem_clock_offset_max_mhz;
     state->current = gpu_state->mem_clock_offset_mhz;
     break;
-  case SLIDER_COUNT:
+  default:
     break;
   }
 #undef INIT_LABEL
@@ -109,42 +109,72 @@ void oc_controller_draw_slider(const OCController *controller, Slider slider,
 }
 
 // TODO implement gpu sets
-static void apply_slider(SliderState *state) { state->dirty = false; }
-
-// Abandons the pending edit and reverts to whatever is live on the GPU
-static void discard_slider(SliderState *state, const GpuState *gpu_state,
-                           Slider slider) {
-  switch (slider) {
-  case SLIDER_POWER_LIMIT:
-    state->current = (int)gpu_state->power_limit_milliwatts;
-    break;
-  case SLIDER_CORE_CLOCK_OFFSET:
-    state->current = gpu_state->gpc_clock_offset_mhz;
-    break;
-  case SLIDER_MEM_CLOCK_OFFSET:
-    state->current = gpu_state->mem_clock_offset_mhz;
-    break;
-  case SLIDER_COUNT:
-    break;
+static void apply(OCController *controller) {
+  for (int i = 0; i < SLIDER_COUNT; ++i) {
+    controller->sliders[i].dirty = false;
   }
-  state->dirty = false;
 }
 
-// Abandons the pending edit and resets to factory-default value
-static void reset_slider(SliderState *state, const GpuState *gpu_state,
-                         Slider slider) {
+static int live_value_for_slider(Slider slider, const GpuState *gpu_state) {
   switch (slider) {
   case SLIDER_POWER_LIMIT:
-    state->current = (int)gpu_state->tdp_milliwatts;
-    break;
+    return (int)gpu_state->power_limit_milliwatts;
+  case SLIDER_CORE_CLOCK_OFFSET:
+    return gpu_state->gpc_clock_offset_mhz;
+  case SLIDER_MEM_CLOCK_OFFSET:
+    return gpu_state->mem_clock_offset_mhz;
+  default:
+    return 0;
+  }
+}
+
+// Abandons every slider's pending edit and reverts to whatever is live on
+// the GPU
+static void discard(OCController *controller, const GpuState *gpu_state) {
+  for (int i = 0; i < SLIDER_COUNT; ++i) {
+    SliderState *state = &controller->sliders[i];
+    state->current = live_value_for_slider((Slider)i, gpu_state);
+    state->dirty = false;
+  }
+}
+
+static int default_for_slider(Slider slider, const GpuState *gpu_state) {
+  switch (slider) {
+  case SLIDER_POWER_LIMIT:
+    return (int)gpu_state->tdp_milliwatts;
   case SLIDER_CORE_CLOCK_OFFSET:
   case SLIDER_MEM_CLOCK_OFFSET:
-    state->current = 0;
-    break;
-  case SLIDER_COUNT:
-    break;
+  default:
+    return 0;
   }
-  state->dirty = true;
+}
+
+bool oc_controller_at_default_values(const GpuState *gpu_state) {
+  for (int i = 0; i < SLIDER_COUNT; ++i) {
+    if (live_value_for_slider((Slider)i, gpu_state) !=
+        default_for_slider((Slider)i, gpu_state)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool oc_controller_is_dirty(const OCController *controller) {
+  for (int i = 0; i < SLIDER_COUNT; ++i) {
+    if (controller->sliders[i].dirty) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Resets every slider to its factory-default value and applies immediately
+static void reset(OCController *controller, const GpuState *gpu_state) {
+  for (int i = 0; i < SLIDER_COUNT; ++i) {
+    SliderState *state = &controller->sliders[i];
+    state->current = default_for_slider((Slider)i, gpu_state);
+    state->dirty = false;
+  }
 }
 
 static void nudge_slider(SliderState *state, Slider slider, bool forward) {
@@ -198,16 +228,13 @@ void oc_controller_handle_input(OCController *controller,
     nudge_slider(selected, controller->selected_slider, true);
     break;
   case 'd':
-    discard_slider(selected, gpu_state, controller->selected_slider);
+    discard(controller, gpu_state);
     break;
   case 'r':
-    for (int i = 0; i < SLIDER_COUNT; ++i) {
-      reset_slider(&controller->sliders[i], gpu_state, (Slider)i);
-      apply_slider(&controller->sliders[i]);
-    }
+    reset(controller, gpu_state);
     break;
   case 'a':
-    apply_slider(selected);
+    apply(controller);
     break;
   default:
     return;

@@ -215,14 +215,36 @@ static void draw_oc_tab(WINDOW *tab_page, const GpuState *state,
     y_pos += SLIDER_HEIGHT + 1;
   }
 
-  int left_col_last_row = y_pos;
-
   y_pos = 1;
   x_pos += (cols / 2) + 1;
 
   mvwprintw(tab_page, y_pos++, x_pos, "[j/k] navigate [h/l] adjust");
-  mvwprintw(tab_page, y_pos++, x_pos, "[a]pply        [d]iscard    [r]eset");
-  y_pos++;
+
+  bool dirty = oc_controller_is_dirty(oc_controller);
+  bool at_defaults = oc_controller_at_default_values(state);
+
+  static constexpr char APPLY_LABEL[] = "[a]pply   ";
+  static constexpr char DISCARD_LABEL[] = "[d]iscard   ";
+  static constexpr char RESET_LABEL[] = "[r]eset";
+
+  int discard_x = x_pos + (int)strlen(APPLY_LABEL);
+  int reset_x = discard_x + (int)strlen(DISCARD_LABEL);
+
+  if (dirty) {
+    wattr_set(tab_page, A_BOLD, 0, nullptr);
+  } else {
+    wattr_set(tab_page, A_DIM, 0, nullptr);
+  }
+  mvwprintw(tab_page, y_pos, x_pos, "%s", APPLY_LABEL);
+  mvwprintw(tab_page, y_pos, discard_x, "%s", DISCARD_LABEL);
+  if (at_defaults) {
+    wattr_set(tab_page, A_DIM, 0, nullptr);
+  } else {
+    wattr_set(tab_page, A_BOLD, 0, nullptr);
+  }
+  mvwprintw(tab_page, y_pos, reset_x, "%s", RESET_LABEL);
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  y_pos += 2;
 
   mvwprintw(tab_page, y_pos++, x_pos, "Power Draw: %u.%u W   Temp: %u°C",
             (state->power_draw_milliwatts / 100) / 10,
@@ -240,14 +262,13 @@ static void draw_oc_tab(WINDOW *tab_page, const GpuState *state,
     mvwprintw(tab_page, y_pos++, x_pos, "None");
   }
   wattr_set(tab_page, A_NORMAL, PAIR_DANGER, nullptr);
-  unsigned int max_displayed_throttle_reasons =
-      (unsigned int)(left_col_last_row - y_pos);
+  static constexpr unsigned int MAX_DISPLAYED_THROTTLE_REASONS = 4;
   unsigned int counter = 0;
   for (unsigned int i = 0; i < state->throttle_reason_count; ++i) {
     ++counter;
-    if (counter > max_displayed_throttle_reasons) {
+    if (counter > MAX_DISPLAYED_THROTTLE_REASONS) {
       mvwprintw(tab_page, y_pos, x_pos, "+ %u more",
-                counter - max_displayed_throttle_reasons);
+                counter - MAX_DISPLAYED_THROTTLE_REASONS);
       continue;
     }
     mvwprintw(tab_page, y_pos++, x_pos, "%s", state->throttle_reasons[i]);
