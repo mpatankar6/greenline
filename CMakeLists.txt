@@ -44,7 +44,7 @@ target_compile_options(greenline PRIVATE
   -Wtype-limits
   -Wnull-dereference
   -Wformat-signedness
-  $<$<CXX_COMPILER_ID:Clang>:-Wconditional-uninitialized>
+  $<$<C_COMPILER_ID:Clang>:-Wconditional-uninitialized>
   $<$<CONFIG:Debug>:-g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer>
   $<$<CONFIG:Release>:-O2>
 )
