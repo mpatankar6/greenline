@@ -57,4 +57,10 @@ const GpuState *gpu_get_state(const Gpu *gpu);
 
 void gpu_update_state(Gpu *gpu);
 
+void gpu_set_power_limit(Gpu *gpu, unsigned int milliwatts);
+
+void gpu_set_gpc_clock_offset(Gpu *gpu, int offset_mhz);
+
+void gpu_set_mem_clock_offset(Gpu *gpu, int offset_mhz);
+
 void gpu_destroy(Gpu *gpu);

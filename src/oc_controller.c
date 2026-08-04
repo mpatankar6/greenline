@@ -108,10 +108,26 @@ void oc_controller_draw_slider(const OCController *controller, Slider slider,
   mvwprintw(window, 2, cols - max_len, "%d %s", display_max, unit);
 }
 
-// TODO implement gpu sets
-static void apply(OCController *controller) {
+static void apply(OCController *controller, Gpu *gpu) {
   for (int i = 0; i < SLIDER_COUNT; ++i) {
-    controller->sliders[i].dirty = false;
+    SliderState *state = &controller->sliders[i];
+    if (!state->dirty) {
+      continue;
+    }
+    switch ((Slider)i) {
+    case SLIDER_POWER_LIMIT:
+      gpu_set_power_limit(gpu, (unsigned int)state->current);
+      break;
+    case SLIDER_CORE_CLOCK_OFFSET:
+      gpu_set_gpc_clock_offset(gpu, state->current);
+      break;
+    case SLIDER_MEM_CLOCK_OFFSET:
+      gpu_set_mem_clock_offset(gpu, state->current);
+      break;
+    default:
+      break;
+    }
+    state->dirty = false;
   }
 }
 
@@ -169,12 +185,14 @@ bool oc_controller_is_dirty(const OCController *controller) {
 }
 
 // Resets every slider to its factory-default value and applies immediately
-static void reset(OCController *controller, const GpuState *gpu_state) {
+static void reset(OCController *controller, Gpu *gpu,
+                  const GpuState *gpu_state) {
   for (int i = 0; i < SLIDER_COUNT; ++i) {
     SliderState *state = &controller->sliders[i];
     state->current = default_for_slider((Slider)i, gpu_state);
-    state->dirty = false;
+    state->dirty = true;
   }
+  apply(controller, gpu);
 }
 
 static void nudge_slider(SliderState *state, Slider slider, bool forward) {
@@ -203,8 +221,8 @@ static void nudge_slider(SliderState *state, Slider slider, bool forward) {
   state->dirty = true;
 }
 
-void oc_controller_handle_input(OCController *controller,
-                                const GpuState *gpu_state, int key) {
+void oc_controller_handle_input(OCController *controller, Gpu *gpu, int key) {
+  const GpuState *gpu_state = gpu_get_state(gpu);
   SliderState *selected = &controller->sliders[controller->selected_slider];
   switch (key) {
   case KEY_DOWN:
@@ -231,10 +249,10 @@ void oc_controller_handle_input(OCController *controller,
     discard(controller, gpu_state);
     break;
   case 'r':
-    reset(controller, gpu_state);
+    reset(controller, gpu, gpu_state);
     break;
   case 'a':
-    apply(controller);
+    apply(controller, gpu);
     break;
   default:
     return;

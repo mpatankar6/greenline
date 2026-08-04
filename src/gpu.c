@@ -233,7 +233,7 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
 
   nvmlClockOffset_t gpc_clock_offset = {
       .version = nvmlClockOffset_v1, .type = NVML_CLOCK_GRAPHICS,
-      .pstate = pstate};
+      .pstate = NVML_PSTATE_0};
   last_status = nvmlDeviceGetClockOffsets(device, &gpc_clock_offset);
   check_error(last_status, "Error retrieving gpc clock offset");
   state->gpc_clock_offset_mhz = gpc_clock_offset.clockOffsetMHz;
@@ -241,7 +241,9 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
   state->gpc_clock_offset_max_mhz = gpc_clock_offset.maxClockOffsetMHz;
 
   nvmlClockOffset_t mem_clock_offset = {
-      .version = nvmlClockOffset_v1, .type = NVML_CLOCK_MEM, .pstate = pstate};
+      .version = nvmlClockOffset_v1,
+      .type = NVML_CLOCK_MEM,
+      .pstate = NVML_PSTATE_0};
   last_status = nvmlDeviceGetClockOffsets(device, &mem_clock_offset);
   check_error(last_status, "Error retrieving mem clock offset");
   state->mem_clock_offset_mhz = mem_clock_offset.clockOffsetMHz;
@@ -284,6 +286,33 @@ void gpu_update_state(Gpu *gpu) {
     gpu->state.initialized = true;
   }
   gpu_update_dynamic_state(gpu);
+}
+
+void gpu_set_power_limit(Gpu *gpu, unsigned int milliwatts) {
+  auto status = nvmlDeviceSetPowerManagementLimit(gpu->handle, milliwatts);
+  check_error(status, "Error setting power limit");
+}
+
+void gpu_set_gpc_clock_offset(Gpu *gpu, int offset_mhz) {
+  nvmlClockOffset_t offset = {
+      .version = nvmlClockOffset_v1,
+      .type = NVML_CLOCK_GRAPHICS,
+      .pstate = NVML_PSTATE_0,
+      .clockOffsetMHz = offset_mhz,
+  };
+  auto status = nvmlDeviceSetClockOffsets(gpu->handle, &offset);
+  check_error(status, "Error setting gpc clock offset");
+}
+
+void gpu_set_mem_clock_offset(Gpu *gpu, int offset_mhz) {
+  nvmlClockOffset_t offset = {
+      .version = nvmlClockOffset_v1,
+      .type = NVML_CLOCK_MEM,
+      .pstate = NVML_PSTATE_0,
+      .clockOffsetMHz = offset_mhz,
+  };
+  auto status = nvmlDeviceSetClockOffsets(gpu->handle, &offset);
+  check_error(status, "Error setting mem clock offset");
 }
 
 void gpu_destroy(Gpu *gpu) {

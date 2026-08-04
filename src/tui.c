@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 static constexpr char TITLE[] = "Greenline";
 static constexpr int MIN_WIDTH = 80;
@@ -19,6 +20,7 @@ static constexpr int MIN_HEIGHT = 24;
 
 static unsigned int poll_ms = 2000;
 static bool modal_active = false;
+static bool is_root;
 
 static void init_colors() {
   start_color();
@@ -244,7 +246,16 @@ static void draw_oc_tab(WINDOW *tab_page, const GpuState *state,
   }
   mvwprintw(tab_page, y_pos, reset_x, "%s", RESET_LABEL);
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
-  y_pos += 2;
+  ++y_pos;
+
+  if (!is_root) {
+    wattr_set(tab_page, A_BOLD | A_ITALIC, PAIR_DANGER, nullptr);
+    mvwprintw(tab_page, y_pos++, x_pos,
+              "Not running as root -- controls disabled!");
+    wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  } else {
+    ++y_pos;
+  }
 
   mvwprintw(tab_page, y_pos++, x_pos, "Power Draw: %u.%u W   Temp: %u°C",
             (state->power_draw_milliwatts / 100) / 10,
@@ -252,7 +263,7 @@ static void draw_oc_tab(WINDOW *tab_page, const GpuState *state,
             state->temperature_celsius);
   mvwprintw(tab_page, y_pos++, x_pos, "Fan Speed:  %u%% (%u RPM)",
             state->fan_speed_percentage, state->fan_speed_rpm);
-  y_pos++;
+  ++y_pos;
 
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Throttle Reasons");
@@ -342,6 +353,8 @@ static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
 }
 
 void tui_init() {
+  is_root = geteuid() == 0;
+
   if (setlocale(LC_ALL, "") == nullptr) {
     (void)fprintf(stderr, "warning: couldn't set locale\n");
   }
@@ -417,9 +430,8 @@ void tui_run(Gpu *gpu) {
       auto should_continue = handle_input(current_key);
       if (modal_active) {
         config_modal_handle_input(config_modal, current_key);
-      } else if (selected_tab == TAB_OC) {
-        oc_controller_handle_input(oc_controller, gpu_get_state(gpu),
-                                   current_key);
+      } else if (selected_tab == TAB_OC && is_root) {
+        oc_controller_handle_input(oc_controller, gpu, current_key);
       }
       if (!should_continue) {
         if (modal_active) {
