@@ -26,6 +26,8 @@ typedef struct {
   unsigned int temperature_celsius;
   unsigned int fan_speed_percentage;
   unsigned int fan_speed_rpm;
+  unsigned int fan_target_percent;
+  bool fan_auto;
   char performance_state[4]; // Ex: "P0", "P8", or "?"
   unsigned int num_fan_controllers;
   unsigned int num_gpu_cores;
@@ -45,8 +47,6 @@ typedef struct {
   int mem_clock_offset_max_mhz;
   char throttle_reasons[MAX_THROTTLE_REASONS][MAX_THROTTLE_REASON_LEN];
   unsigned int throttle_reason_count;
-  unsigned int fan_target_percent;
-  bool fan_auto;
   unsigned int temp_shutdown_threshold_celsius;
   unsigned int temp_slowdown_threshold_celsius;
   unsigned int temp_gpu_max_threshold_celsius;

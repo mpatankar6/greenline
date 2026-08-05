@@ -213,7 +213,7 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
       nvmlDeviceGetClockInfo(device, NVML_CLOCK_MEM, &state->memory_clock_mhz);
   check_error(last_status, "Error retrieving device memory clock");
 
-  // These two calls assume a fan index of 0. This is okay because consumer GPUs
+  // These calls assume a fan index of 0. This is okay because consumer GPUs
   // typically report all fans under index 0 in NVML.
   last_status =
       nvmlDeviceGetFanSpeed_v2(device, 0, &state->fan_speed_percentage);
@@ -312,6 +312,7 @@ void gpu_update_state(Gpu *gpu) {
 void gpu_set_power_limit(Gpu *gpu, unsigned int milliwatts) {
   auto status = nvmlDeviceSetPowerManagementLimit(gpu->handle, milliwatts);
   check_error(status, "Error setting power limit");
+  gpu_update_state(gpu);
 }
 
 void gpu_set_gpc_clock_offset(Gpu *gpu, int offset_mhz) {
@@ -323,6 +324,7 @@ void gpu_set_gpc_clock_offset(Gpu *gpu, int offset_mhz) {
   };
   auto status = nvmlDeviceSetClockOffsets(gpu->handle, &offset);
   check_error(status, "Error setting gpc clock offset");
+  gpu_update_state(gpu);
 }
 
 void gpu_set_mem_clock_offset(Gpu *gpu, int offset_mhz) {
@@ -334,16 +336,19 @@ void gpu_set_mem_clock_offset(Gpu *gpu, int offset_mhz) {
   };
   auto status = nvmlDeviceSetClockOffsets(gpu->handle, &offset);
   check_error(status, "Error setting mem clock offset");
+  gpu_update_state(gpu);
 }
 
 void gpu_set_fan_target(Gpu *gpu, unsigned int percent) {
   auto status = nvmlDeviceSetFanSpeed_v2(gpu->handle, 0, percent);
   check_error(status, "Error setting fan target speed");
+  gpu_update_state(gpu);
 }
 
 void gpu_set_fan_auto(Gpu *gpu) {
   auto status = nvmlDeviceSetDefaultFanSpeed_v2(gpu->handle, 0);
   check_error(status, "Error setting fan control policy to auto");
+  gpu_update_state(gpu);
 }
 
 void gpu_destroy(Gpu *gpu) {
