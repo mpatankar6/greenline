@@ -90,6 +90,40 @@ static ShouldContinue handle_input(int input) {
   return true;
 }
 
+static void handle_thermals_input(Gpu *gpu, int key) {
+  static constexpr unsigned int FAN_STEP_PERCENT = 5;
+  const GpuState *state = gpu_get_state(gpu);
+  switch (key) {
+  case KEY_LEFT:
+  case 'h':
+    if (!state->fan_auto) {
+      auto will_underflow = state->fan_target_percent < FAN_STEP_PERCENT;
+      auto new_target =
+          will_underflow ? 0 : state->fan_target_percent - FAN_STEP_PERCENT;
+      gpu_set_fan_target(gpu, new_target);
+    }
+    break;
+  case KEY_RIGHT:
+  case 'l':
+    if (!state->fan_auto) {
+      auto will_exceed_100 = state->fan_target_percent + FAN_STEP_PERCENT > 100;
+      auto new_target =
+          will_exceed_100 ? 100 : state->fan_target_percent + FAN_STEP_PERCENT;
+      gpu_set_fan_target(gpu, new_target);
+    }
+    break;
+  case 'm':
+    if (state->fan_auto) {
+      gpu_set_fan_target(gpu, state->fan_target_percent);
+    } else {
+      gpu_set_fan_auto(gpu);
+    }
+    break;
+  default:
+    break;
+  }
+}
+
 static void draw_tab_line() {
   static constexpr char TABS[][16] = {
       {"General"},
@@ -287,7 +321,59 @@ static void draw_oc_tab(WINDOW *tab_page, const GpuState *state,
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
 }
 
-static void draw_thermals_tab(WINDOW *tab_page) {}
+static void draw_thermals_tab(WINDOW *tab_page, const GpuState *state) {
+  int y_pos = 1;
+  int x_pos = 1;
+  int cols = getmaxx(tab_page);
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Fan Control");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+
+  if (!state->fan_auto && is_root) {
+    wattr_set(tab_page, A_BOLD, 0, nullptr);
+  } else {
+    wattr_set(tab_page, A_DIM, 0, nullptr);
+  }
+  mvwprintw(tab_page, y_pos++, x_pos, "Fan Target: %u%% [h/l]",
+            state->fan_target_percent);
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+
+  mvwprintw(tab_page, y_pos++, x_pos, "Fan Speed:  %u%% (%u RPM)",
+            state->fan_speed_percentage, state->fan_speed_rpm);
+  mvwprintw(tab_page, y_pos++, x_pos, "Fan Mode:   %s [m]",
+            (int)state->fan_auto ? "Auto" : "Manual");
+  y_pos++;
+
+  if (!is_root) {
+    wattr_set(tab_page, A_BOLD | A_ITALIC, PAIR_DANGER, nullptr);
+    mvwprintw(tab_page, y_pos++, x_pos,
+              "Not running as root -- controls disabled!");
+    wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  } else {
+    y_pos++;
+  }
+
+  wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Temperature");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Current:  %u°C",
+            state->temperature_celsius);
+
+  // Switch columns
+  y_pos = 1;
+  x_pos += cols / 2;
+
+  wattr_set(tab_page, A_UNDERLINE, PAIR_HEADING, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Limits");
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos, "Slowdown: %u°C",
+            state->temp_slowdown_threshold_celsius);
+  mvwprintw(tab_page, y_pos++, x_pos, "Shutdown: %u°C",
+            state->temp_shutdown_threshold_celsius);
+  mvwprintw(tab_page, y_pos++, x_pos, "GPU Max:  %u°C",
+            state->temp_gpu_max_threshold_celsius);
+}
 
 static void draw_info_tab(WINDOW *tab_page, const GpuState *state) {
   int y_pos = 1;
@@ -342,7 +428,7 @@ static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
     break;
   case TAB_THERMALS:
     plot_controller_switch_profile(plot_controller, PLOT_PROFILE_THERMALS);
-    draw_thermals_tab(tab_page);
+    draw_thermals_tab(tab_page, gpu_state);
     break;
   case TAB_INFO:
     draw_info_tab(tab_page, gpu_state);
@@ -432,6 +518,8 @@ void tui_run(Gpu *gpu) {
         config_modal_handle_input(config_modal, current_key);
       } else if (selected_tab == TAB_OC && is_root) {
         oc_controller_handle_input(oc_controller, gpu, current_key);
+      } else if (selected_tab == TAB_THERMALS && is_root) {
+        handle_thermals_input(gpu, current_key);
       }
       if (!should_continue) {
         if (modal_active) {
