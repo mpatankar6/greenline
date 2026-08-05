@@ -45,6 +45,11 @@ typedef struct {
   int mem_clock_offset_max_mhz;
   char throttle_reasons[MAX_THROTTLE_REASONS][MAX_THROTTLE_REASON_LEN];
   unsigned int throttle_reason_count;
+  unsigned int fan_target_percent;
+  bool fan_auto;
+  unsigned int temp_shutdown_threshold_celsius;
+  unsigned int temp_slowdown_threshold_celsius;
+  unsigned int temp_gpu_max_threshold_celsius;
 } GpuState;
 
 typedef struct Gpu Gpu;
@@ -62,5 +67,9 @@ void gpu_set_power_limit(Gpu *gpu, unsigned int milliwatts);
 void gpu_set_gpc_clock_offset(Gpu *gpu, int offset_mhz);
 
 void gpu_set_mem_clock_offset(Gpu *gpu, int offset_mhz);
+
+void gpu_set_fan_target(Gpu *gpu, unsigned int percent);
+
+void gpu_set_fan_auto(Gpu *gpu);
 
 void gpu_destroy(Gpu *gpu);

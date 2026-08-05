@@ -166,6 +166,19 @@ static void gpu_update_static_state(Gpu *gpu) {
       device, &state->power_limit_min_milliwatts,
       &state->power_limit_max_milliwatts);
   check_error(last_status, "Error retrieving power limit constraints");
+
+  last_status = nvmlDeviceGetTemperatureThreshold(
+      device, NVML_TEMPERATURE_THRESHOLD_SHUTDOWN,
+      &state->temp_shutdown_threshold_celsius);
+  check_error(last_status, "Error retrieving shutdown temperature threshold");
+  last_status = nvmlDeviceGetTemperatureThreshold(
+      device, NVML_TEMPERATURE_THRESHOLD_SLOWDOWN,
+      &state->temp_slowdown_threshold_celsius);
+  check_error(last_status, "Error retrieving slowdown temperature threshold");
+  last_status = nvmlDeviceGetTemperatureThreshold(
+      device, NVML_TEMPERATURE_THRESHOLD_GPU_MAX,
+      &state->temp_gpu_max_threshold_celsius);
+  check_error(last_status, "Error retrieving gpu max temperature threshold");
 }
 
 static void gpu_update_dynamic_state(Gpu *gpu) {
@@ -211,6 +224,15 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
   check_error(last_status, "Error retrieving device fan speed RPM");
   state->fan_speed_rpm = fan_speed_info.speed;
 
+  last_status =
+      nvmlDeviceGetTargetFanSpeed(device, 0, &state->fan_target_percent);
+  check_error(last_status, "Error retrieving device fan target speed");
+
+  nvmlFanControlPolicy_t fan_policy = NVML_FAN_POLICY_TEMPERATURE_CONTINOUS_SW;
+  last_status = nvmlDeviceGetFanControlPolicy_v2(device, 0, &fan_policy);
+  check_error(last_status, "Error retrieving device fan control policy");
+  state->fan_auto = fan_policy == NVML_FAN_POLICY_TEMPERATURE_CONTINOUS_SW;
+
   nvmlTemperature_t temperature_info = {
       .version = nvmlTemperature_v1,
       .sensorType = NVML_TEMPERATURE_GPU,
@@ -231,19 +253,18 @@ static void gpu_update_dynamic_state(Gpu *gpu) {
       nvmlDeviceGetPowerManagementLimit(device, &state->power_limit_milliwatts);
   check_error(last_status, "Error retrieving device power limit");
 
-  nvmlClockOffset_t gpc_clock_offset = {
-      .version = nvmlClockOffset_v1, .type = NVML_CLOCK_GRAPHICS,
-      .pstate = NVML_PSTATE_0};
+  nvmlClockOffset_t gpc_clock_offset = {.version = nvmlClockOffset_v1,
+                                        .type = NVML_CLOCK_GRAPHICS,
+                                        .pstate = NVML_PSTATE_0};
   last_status = nvmlDeviceGetClockOffsets(device, &gpc_clock_offset);
   check_error(last_status, "Error retrieving gpc clock offset");
   state->gpc_clock_offset_mhz = gpc_clock_offset.clockOffsetMHz;
   state->gpc_clock_offset_min_mhz = gpc_clock_offset.minClockOffsetMHz;
   state->gpc_clock_offset_max_mhz = gpc_clock_offset.maxClockOffsetMHz;
 
-  nvmlClockOffset_t mem_clock_offset = {
-      .version = nvmlClockOffset_v1,
-      .type = NVML_CLOCK_MEM,
-      .pstate = NVML_PSTATE_0};
+  nvmlClockOffset_t mem_clock_offset = {.version = nvmlClockOffset_v1,
+                                        .type = NVML_CLOCK_MEM,
+                                        .pstate = NVML_PSTATE_0};
   last_status = nvmlDeviceGetClockOffsets(device, &mem_clock_offset);
   check_error(last_status, "Error retrieving mem clock offset");
   state->mem_clock_offset_mhz = mem_clock_offset.clockOffsetMHz;
@@ -313,6 +334,16 @@ void gpu_set_mem_clock_offset(Gpu *gpu, int offset_mhz) {
   };
   auto status = nvmlDeviceSetClockOffsets(gpu->handle, &offset);
   check_error(status, "Error setting mem clock offset");
+}
+
+void gpu_set_fan_target(Gpu *gpu, unsigned int percent) {
+  auto status = nvmlDeviceSetFanSpeed_v2(gpu->handle, 0, percent);
+  check_error(status, "Error setting fan target speed");
+}
+
+void gpu_set_fan_auto(Gpu *gpu) {
+  auto status = nvmlDeviceSetDefaultFanSpeed_v2(gpu->handle, 0);
+  check_error(status, "Error setting fan control policy to auto");
 }
 
 void gpu_destroy(Gpu *gpu) {
