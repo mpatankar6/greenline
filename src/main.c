@@ -1,7 +1,5 @@
 #include "gpu.h"
 #include "tui.h"
-#include <curses.h>
-#include <nvml.h>
 #include <stdio.h>
 #include <string.h>
 
