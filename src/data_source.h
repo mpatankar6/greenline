@@ -3,17 +3,16 @@
 #include <stddef.h>
 #include <string.h>
 
+#define FIELD_TYPE(field) (typeof((GpuState){0}.field))
+
 #define VALUE_OFFSET(field)                                                    \
-  _Generic((typeof((GpuState){0}.field)){0},                                   \
-      unsigned int: offsetof(GpuState, field))
-
+  _Generic(FIELD_TYPE(field){0}, unsigned int: offsetof(GpuState, field))
 #define OFFSET_BOUND(field)                                                    \
-  _Generic((typeof((GpuState){0}.field)){0},                                   \
-      unsigned int: (Bound){.kind = BOUND_STRUCT_OFFSET,                       \
-                            .offset = offsetof(GpuState, field)})
+  {.kind = BOUND_STRUCT_OFFSET,                                                \
+   .offset = _Generic(FIELD_TYPE(field){0},                                    \
+       unsigned int: offsetof(GpuState, field))}
 
-#define CONST_BOUND(value)                                                     \
-  (Bound) { .kind = BOUND_CONSTANT, .constant = (value) }
+#define CONST_BOUND(value) {.kind = BOUND_CONSTANT, .constant = (value)}
 #define PERCENT_BOUNDS CONST_BOUND(0), CONST_BOUND(100)
 
 typedef enum { BOUND_CONSTANT, BOUND_STRUCT_OFFSET } BoundKind;
@@ -45,6 +44,7 @@ static inline int resolve_bound(Bound bound, const GpuState *state) {
   case BOUND_STRUCT_OFFSET:
     return (int)*(unsigned int *)((char *)state + bound.offset);
   }
+  unreachable();
 }
 
 static inline int data_source_lower(DataSource source, const GpuState *state) {

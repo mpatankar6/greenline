@@ -10,22 +10,23 @@ project(greenline
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NVML REQUIRED IMPORTED_TARGET nvidia-ml)
 pkg_check_modules(NCURSES REQUIRED IMPORTED_TARGET ncurses)
 
 add_executable(greenline
-  src/main.c
-  src/gpu.c
-  src/tui.c
   src/circular_buffer.c
-  src/plot_controller.c
-  src/plot.c
   src/config_modal.c
+  src/gpu.c
+  src/main.c
   src/oc_controller.c
+  src/plot.c
+  src/plot_controller.c
+  src/tui.c
 )
-
+ 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT lto_supported OUTPUT error)
 if(lto_supported)
@@ -37,8 +38,8 @@ endif()
 target_compile_definitions(greenline PRIVATE VERSION_STRING="${PROJECT_VERSION}")
 target_compile_options(greenline PRIVATE
   -Wall
+  -Werror
   -Wextra
-  -Wpedantic
   -Wshadow
   -Wconversion
   -Wtype-limits
@@ -52,6 +53,7 @@ target_link_options(greenline PRIVATE
   $<$<CONFIG:Debug>:-fsanitize=address,undefined>
 )
 
+target_link_libraries(greenline PRIVATE m)
 target_link_libraries(greenline PRIVATE PkgConfig::NVML)
 target_link_libraries(greenline PRIVATE PkgConfig::NCURSES)
 

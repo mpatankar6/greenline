@@ -4,6 +4,7 @@
 #include "gpu.h"
 #include "plot.h"
 #include <assert.h>
+#include <ncurses.h>
 #include <stdlib.h>
 
 typedef struct PairedPlot {
@@ -35,6 +36,7 @@ static Plot **get_subplot_slot(PlotController *controller, ModalSide side) {
   case MODAL_RIGHT:
     return &plot->right_subplot;
   }
+  unreachable();
 }
 
 PlotController *plot_controller_create() {
@@ -122,7 +124,7 @@ void plot_controller_update_selection(PlotController *plot_controller,
 
 void plot_controller_destroy(PlotController *plot_controller) {
   config_modal_destroy(plot_controller->config_modal);
-  for (int i =0; i < PLOT_PROFILE_COUNT ; ++i ) {
+  for (int i = 0; i < PLOT_PROFILE_COUNT; ++i) {
     auto plot_pair = plot_controller->plots[i];
     plot_destroy(plot_pair.left_subplot);
     plot_destroy(plot_pair.right_subplot);

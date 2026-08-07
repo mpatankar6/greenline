@@ -52,16 +52,17 @@ static const char *arch_to_string(nvmlDeviceArchitecture_t arch) {
 }
 
 static unsigned int bytes_to_mib(unsigned long long bytes) {
-  const int BYTES_PER_MIB = 1024 * 1024;
+  const unsigned int BYTES_PER_MIB = 1024 * 1024;
   return (unsigned int)(bytes / BYTES_PER_MIB);
 }
 
 static void describe_throttle_reasons(unsigned long long reasons,
                                       GpuState *state) {
-  static constexpr struct {
+  struct ThrottleReason {
     const unsigned long long VALUE;
     const char NAME[MAX_THROTTLE_REASON_LEN];
-  } REASONS[] = {
+  };
+  static constexpr struct ThrottleReason REASONS[] = {
       {nvmlClocksEventReasonGpuIdle, "Idle"},
       {nvmlClocksEventReasonApplicationsClocksSetting, "App Clocks"},
       {nvmlClocksEventReasonSwPowerCap, "Power Cap"},

@@ -3,6 +3,7 @@
 #include "data_source.h"
 #include "plot_controller.h"
 #include <assert.h>
+#include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,7 @@ static DataSource get_selected_source(const ConfigModal *modal,
   case MODAL_RIGHT:
     return modal->get_right_selection(modal->plot_controller);
   }
+  unreachable();
 }
 
 static void draw_source_list(const ConfigModal *config_modal, WINDOW *window,
@@ -40,9 +42,9 @@ static void draw_source_list(const ConfigModal *config_modal, WINDOW *window,
   wattr_set(window, A_NORMAL, 0, nullptr);
 
   for (size_t i = 0; i < SOURCE_COUNT; ++i) {
-    const auto SELECTED_SOURCE = get_selected_source(config_modal, side);
+    auto selected_source = get_selected_source(config_modal, side);
     char checkbox[] = "[ ]";
-    if (sources_equal(SOURCES[i], SELECTED_SOURCE)) {
+    if (sources_equal(SOURCES[i], selected_source)) {
       strcpy(checkbox, "[*]");
     }
     if (config_modal->current_col == (int)side &&
