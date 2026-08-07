@@ -66,6 +66,7 @@ static constexpr DataSource SOURCES[] = {
     {"Core Clock", "MHz", CONST_BOUND(0), OFFSET_BOUND(max_core_clock_mhz),
      VALUE_OFFSET(core_clock_mhz)},
     {"Fan Speed", "%", PERCENT_BOUNDS, VALUE_OFFSET(fan_speed_percentage)},
+    {"Fan Target", "%", PERCENT_BOUNDS, VALUE_OFFSET(fan_target_percent)},
     {"Mem Clock", "MHz", CONST_BOUND(0), OFFSET_BOUND(max_memory_clock_mhz),
      VALUE_OFFSET(memory_clock_mhz)},
     {"VRAM Used", "MiB", CONST_BOUND(0), OFFSET_BOUND(total_vram_mib),

@@ -427,8 +427,13 @@ static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
     delwin(oc_plot_region);
     break;
   case TAB_THERMALS:
-    plot_controller_switch_profile(plot_controller, PLOT_PROFILE_THERMALS);
     draw_thermals_tab(tab_page, gpu_state);
+    auto thermals_plot_region =
+        derwin(tab_page, getmaxy(tab_page) - PLOT_START_ROW,
+               getmaxx(tab_page), PLOT_START_ROW, 0);
+    plot_controller_switch_profile(plot_controller, PLOT_PROFILE_THERMALS);
+    plot_controller_draw(plot_controller, gpu_state, thermals_plot_region);
+    delwin(thermals_plot_region);
     break;
   case TAB_INFO:
     draw_info_tab(tab_page, gpu_state);

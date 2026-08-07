@@ -47,6 +47,10 @@ PlotController *plot_controller_create() {
       plot_create(SOURCES[0]);
   plot_controller->plots[PLOT_PROFILE_OC].right_subplot =
       plot_create(SOURCES[3]);
+  plot_controller->plots[PLOT_PROFILE_THERMALS].left_subplot =
+      plot_create(SOURCES[3]);
+  plot_controller->plots[PLOT_PROFILE_THERMALS].right_subplot =
+      plot_create(SOURCES[4]);
 
   CurrentSelectionGetters getters = {.get_left = get_left_selection,
                                      .get_right = get_right_selection};
