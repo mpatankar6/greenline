@@ -5,17 +5,3 @@ Diagnostics:
   MissingIncludes: Strict
   Includes:
     IgnoreHeader: ['bits/.*']
-  ClangTidy:
-    Add: ['bugprone-*', 'cert-*', 'readability-*', 'misc-*', 'portability-*']
-    Remove: ['readability-magic-numbers'] # Too many false positives
-    FastCheckFilter: None
-    CheckOptions:
-      readability-identifier-naming.VariableCase: lower_case
-      readability-identifier-naming.FunctionCase: lower_case
-      readability-identifier-naming.ParameterCase: lower_case
-      readability-identifier-naming.StructCase: CamelCase
-      readability-identifier-naming.TypedefCase: CamelCase
-      readability-identifier-naming.EnumCase: CamelCase
-      readability-identifier-naming.EnumConstantCase: UPPER_CASE
-      readability-identifier-naming.MacroDefinitionCase: UPPER_CASE
-      readability-identifier-naming.ConstantCase: UPPER_CASE
