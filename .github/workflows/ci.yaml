@@ -1,0 +1,45 @@
+name: ci
+on:
+  push: { branches: [main, ci-test] }
+  pull_request:
+
+jobs:
+  build:
+    name: Build (${{ matrix.compiler}})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { compiler: clang, derivation: default }
+          - { compiler: gcc, derivation: gccCheck }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix build .#${{ matrix.derivation }} -L
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: find . -regex '\./\(src\|test\)/.*\.[ch]' > /tmp/sources.txt
+      - run: nix develop -L -c xargs clang-format --dry-run -Werror < /tmp/sources.txt
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix develop -L -c cmake -B build -G Ninja
+      - run: nix develop -L -c run-clang-tidy -quiet -p build
+      - run: nix develop -L -c cmake --build build --target analyze
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix develop -L -c cmake -B build -G Ninja
+      - run: nix develop -L -c cmake --build build
+      - run: nix develop -L -c ctest --test-dir build --output-on-failure
