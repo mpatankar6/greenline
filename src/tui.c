@@ -357,8 +357,17 @@ static void draw_thermals_tab(WINDOW *tab_page, const GpuState *state) {
   wattr_set(tab_page, A_UNDERLINE, 0, nullptr);
   mvwprintw(tab_page, y_pos++, x_pos, "Temperature");
   wattr_set(tab_page, A_NORMAL, 0, nullptr);
-  mvwprintw(tab_page, y_pos++, x_pos, "Current:  %u°C",
+
+  static constexpr double TEMP_WARNING_RATIO = 0.9;
+  auto max_safe_temp = (unsigned int)(state->temp_gpu_max_threshold_celsius *
+                                      TEMP_WARNING_RATIO);
+  auto temp_too_high = state->temperature_celsius > max_safe_temp;
+  mvwprintw(tab_page, y_pos, x_pos, "Current: ");
+  wattr_set(tab_page, A_NORMAL, temp_too_high ? PAIR_DANGER : PAIR_SAFE,
+            nullptr);
+  mvwprintw(tab_page, y_pos++, x_pos + (int)strlen("Current: "), "%u°C",
             state->temperature_celsius);
+  wattr_set(tab_page, A_NORMAL, 0, nullptr);
 
   // Switch columns
   y_pos = 1;
@@ -429,8 +438,8 @@ static void draw_content(WINDOW *tab_page, const GpuState *gpu_state,
   case TAB_THERMALS:
     draw_thermals_tab(tab_page, gpu_state);
     auto thermals_plot_region =
-        derwin(tab_page, getmaxy(tab_page) - PLOT_START_ROW,
-               getmaxx(tab_page), PLOT_START_ROW, 0);
+        derwin(tab_page, getmaxy(tab_page) - PLOT_START_ROW, getmaxx(tab_page),
+               PLOT_START_ROW, 0);
     plot_controller_switch_profile(plot_controller, PLOT_PROFILE_THERMALS);
     plot_controller_draw(plot_controller, gpu_state, thermals_plot_region);
     delwin(thermals_plot_region);
