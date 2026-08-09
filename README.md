@@ -95,3 +95,9 @@ cmake --build build
     - Greenline is light and daemonless with no root service applying settings
       in the background. A reboot always returns the GPU to stock, so a bad
       overclock can never follow you across a restart.
+
+## License
+Copyright (C) 2026 Mihir Patankar
+
+This project is licensed under the GNU General Public License v3.0 or later -
+see the [LICENSE](LICENSE) file for details.

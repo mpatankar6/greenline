@@ -34,6 +34,8 @@
 
           # Rewrite RPATH so libnvidia-ml.so resolves to the driver's library at runtime.
           postFixup = "addDriverRunpath $out/bin/greenline";
+
+          meta.license = pkgs.lib.licenses.gpl3Plus;
         };
     in
     {
