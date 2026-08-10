@@ -11,6 +11,46 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+      - name: Update apt
+        run: sudo apt update
+      - name: Install LLVM toolchain
+        run: |
+          sudo apt install -y lsb-release wget software-properties-common gnupg
+          sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+          sudo ln -sf $(ls -v /usr/bin/clang-[0-9]* | tail -1) /usr/bin/clang
+          echo "CC=clang" >> "$GITHUB_ENV"
+      - name: Install CMake
+        run: |
+          VERSION=4.1.0
+          wget "https://cmake.org/files/v${VERSION%.*}/cmake-${VERSION}-linux-x86_64.sh"
+          sudo sh "cmake-${VERSION}-linux-x86_64.sh" --skip-license --prefix=/usr/local
+      - name: Install NVML
+        run: |
+          VERSION=13-3
+          UBUNTU="ubuntu$(grep '^VERSION_ID=' /etc/os-release | cut -d'"' -f2 | tr -d '.')"
+          CUDA_REPO_URL="https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU}/x86_64"
+          wget -O cuda-keyring.deb "$CUDA_REPO_URL/cuda-keyring_1.1-1_all.deb"
+          sudo dpkg -i cuda-keyring.deb && sudo apt update
+          sudo apt install -y cuda-nvml-dev-${VERSION}
+          sudo ln -sf /usr/lib/pkgconfig/nvidia-ml-${VERSION/-/.}.pc /usr/lib/pkgconfig/nvidia-ml.pc
+      - name: Install other build deps
+        run: |
+          sudo apt install -y ninja-build pkg-config libncurses-dev
+      - name: Compile greenline
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+          cmake --build build
+      - name: Package release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TARBALL="greenline-${VERSION}-x86_64-linux.tar.gz"
+          STAGE="greenline-${VERSION}"
+          mkdir -p "$STAGE"
+          cp build/greenline LICENSE README.md "$STAGE/"
+          tar -czf "$TARBALL" "$STAGE"
+          echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
+          files: ${{ env.TARBALL }}

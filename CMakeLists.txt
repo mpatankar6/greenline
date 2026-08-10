@@ -14,7 +14,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NVML REQUIRED IMPORTED_TARGET nvidia-ml)
-pkg_check_modules(NCURSES REQUIRED IMPORTED_TARGET ncurses)
+pkg_check_modules(NCURSES REQUIRED IMPORTED_TARGET ncursesw)
 
 add_executable(greenline
   src/circular_buffer.c
