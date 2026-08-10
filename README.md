@@ -1,6 +1,8 @@
 # Greenline
 A lightweight keyboard-driven TUI for monitoring and overclocking your NVIDIA
-GPU.
+GPU on Linux.
+
+![demo](demo.gif)
 
 ## Features
 - Monitor GPU utilization, VRAM, temps, fan, power, throttling, and more
@@ -19,12 +21,14 @@ bring about system instability, screen freezes, driver crashes, or reduced
 hardware lifespan. I take no responsibility for hardware damage.
 
 ## Installation
-Greenline is built for x86-64 Linux. It supports consumer NVIDIA GPUs, with an
-architecture of Maxwell or higher. It depends on the NVML library which is only
-included with the proprietary NVIDIA drivers.
+Greenline is built for x86-64 Linux (glibc ≥ 2.34). It supports consumer NVIDIA
+GPUs with an architecture of Maxwell or higher. It depends on the NVML library
+which is only included with the proprietary NVIDIA drivers.
 
 Nix:
 ```bash
+nix profile install github:mpatankar6/greenline
+# Or if you just want to try it out
 nix run github:mpatankar6/greenline
 ```
 
@@ -47,10 +51,11 @@ For other distros, tarballs can be found in [Releases](../../releases).
 **With Nix:** Use the dev shell; it handles dependencies and the NVML library
 path on NixOS. Loads automatically with direnv, or run `nix develop`.
 
-**Otherwise:** Both Clang and GCC are supported. You'll need CMake, Ninja, and
-pkg-config to build. With pkg-config, check you have the required dependencies:
+**Otherwise:** Both Clang and GCC are supported, and you should use a version
+with good C23 support. You'll need CMake, Ninja, and pkg-config to build. With
+pkg-config, check you have the required dependencies:
 ```bash
-pkg-config --exists nvidia-ml ncurses && echo "found" || echo "missing"
+pkg-config --exists nvidia-ml ncursesw && echo "found" || echo "missing"
 ```
 
 ### Development
@@ -72,12 +77,14 @@ ctest --test-dir build --output-on-failure
 With Nix:
 ```sh
 nix build
+nix profile install . # Optionally install to Nix profile
 ```
 
 Otherwise:
 ```sh
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
+sudo cmake --install build # Optionally install to /usr/local/bin
 ```
 
 ## Non-Goals
