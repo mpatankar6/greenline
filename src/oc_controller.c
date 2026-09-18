@@ -1,6 +1,7 @@
 #include "oc_controller.h"
 #include "colors.h"
 #include "gpu.h"
+#include <ncurses.h>
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>

@@ -15,6 +15,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(NVML REQUIRED IMPORTED_TARGET nvidia-ml)
 pkg_check_modules(NCURSES REQUIRED IMPORTED_TARGET ncursesw)
+find_path(NVML_INCLUDE_DIR nvml.h REQUIRED)
 
 add_executable(greenline
   src/circular_buffer.c
@@ -49,6 +50,7 @@ target_compile_options(greenline PRIVATE
   $<$<CONFIG:Debug>:-g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer>
   $<$<CONFIG:Release>:-O2>
 )
+target_include_directories(greenline PRIVATE ${NVML_INCLUDE_DIR})
 target_link_options(greenline PRIVATE
   $<$<CONFIG:Debug>:-fsanitize=address,undefined>
 )
