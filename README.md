@@ -27,21 +27,15 @@ which is only included with the proprietary NVIDIA drivers.
 
 Nix:
 ```bash
-nix profile install github:mpatankar6/greenline
-# Or if you just want to try it out
 nix run github:mpatankar6/greenline
+# Add it as an input to your system flake, or alternatively,
+nix profile install github:mpatankar6/greenline
 ```
 
 AUR:
 ```bash
 # WIP
 # paru -S greenline
-```
-
-GURU:
-```bash
-# WIP
-# emerge greenline
 ```
 
 For other distros, tarballs can be found in [Releases](../../releases).
@@ -51,12 +45,13 @@ For other distros, tarballs can be found in [Releases](../../releases).
 **With Nix:** Use the dev shell; it handles dependencies and the NVML library
 path on NixOS. Loads automatically with direnv, or run `nix develop`.
 
-**Otherwise:** Both Clang and GCC are supported, and you should use a version
-with good C23 support. You'll need CMake, Ninja, and pkg-config to build. With
-pkg-config, check you have the required dependencies:
+**Otherwise:** A Clang or GCC version with good C23 support. You'll need CMake,
+Ninja, and pkg-config to build. With pkg-config, check you have the required 
+dependencies:
 ```bash
 pkg-config --exists nvidia-ml ncursesw && echo "found" || echo "missing"
 ```
+nvidia-ml likely comes from your distro's CUDA package.
 
 ### Development
 ```sh
@@ -87,21 +82,22 @@ cmake --build build
 sudo cmake --install build # Optionally install to /usr/local/bin
 ```
 
-## Non-Goals
+## Limitation
 - Support for non-NVIDIA GPUs
     - We would need an alternative implementation of `gpu.c` for AMD, Apple,
       Intel, etc. Then it can be subbed in at link time. Problem is I don't
       have the hardware to test. I'm open to contributions though.
-- Fan curves
-    - TUIs aren't ergonomic for this,
-      [LACT](https://github.com/ilya-zlobintsev/LACT) is a good program for
+- No fan curves
+    - [LACT](https://github.com/ilya-zlobintsev/LACT) is a good program for
       this.
 - Process management
-    - Not a focus, [nvtop](https://github.com/Syllo/nvtop) does this well.
-- Persistence on reboot
-    - Greenline is light and daemonless with no root service applying settings
-      in the background. A reboot always returns the GPU to stock, so a bad
-      overclock can never follow you across a restart.
+    - [nvtop](https://github.com/Syllo/nvtop) can do this.
+
+Settings need to be reapplied after a reboot. This is somewhat by design, since
+the lack of startup service means a reboot always returns the GPU to stock.
+
+## TODO
+- [ ] Rewrite in Rust
 
 ## License
 Copyright (C) 2026 Mihir Patankar
